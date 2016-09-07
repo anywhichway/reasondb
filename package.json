@@ -1,0 +1,44 @@
+{
+  "name": "ReasonDB",
+  "version": "0.0.1",
+  "description": "An isomorphic, JSON database with a SQL like JOQULAR query syntax and streaming analytics.",
+  "main": "index.js",
+  "client": "./browser/reasondb.js",
+  "reveal": true,
+  "isomorphic": true,
+  "scripts": {
+    "test": "istanbul cover node_modules/mocha/bin/_mocha --report lcov -- -R spec",
+    "browserify": "browserify index.js -o browser/reasondb.js",
+    "minify": "minify browser/reasondb.js > browser/reasondb.min.js",
+    "prepublish": "npm run browserify && npm run minify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anywhichway/reasondb.git"
+  },
+  "keywords": [
+    "CouchDB",
+    "PouchDB",
+    "Firebase",
+    "JSON",
+    "database"
+  ],
+  "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/anywhichway/reasondb/issues"
+  },
+  "homepage": "https://github.com/anywhichway/reasondbl#readme",
+  "devDependencies": {
+    "chai": "^3.4.1",
+    "codeclimate-test-reporter": "^0.2.0",
+    "istanbul": "^0.4.2",
+    "mocha": "^2.3.4",
+    "bluebird": "^3.3.5",
+    "browserify": "^13.0.0",
+    "minify": "^2.0.8"
+  },
+  "dependencies": {
+    "uuid": "^2.0.1"
+  }
+}
