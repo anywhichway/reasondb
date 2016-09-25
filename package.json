@@ -9,7 +9,6 @@
   "scripts": {
     "test": "istanbul cover node_modules/mocha/bin/_mocha --report lcov -- -R spec",
     "browserify": "browserify index.js -o browser/reasondb.js",
-    "minify": "minify browser/reasondb.js > browser/reasondb.min.js",
     "prepublish": "npm run browserify && npm run minify"
   },
   "repository": {
@@ -35,10 +34,10 @@
     "istanbul": "^0.4.2",
     "mocha": "^2.3.4",
     "bluebird": "^3.3.5",
-    "browserify": "^13.0.0",
-    "minify": "^2.0.8"
+    "browserify": "^13.0.0"
   },
   "dependencies": {
+    "node-localstorage": "^1.3.0",
     "uuid": "^2.0.1"
   }
 }
