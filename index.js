@@ -68,20 +68,23 @@ function soundex(s) {
 	return (r + "000").slice(0, 4).toUpperCase();
 }
 
-function CXProduct(collections) {
-	this.deleted = {};
+function CXProduct(collections,filter) {
 	this.collections = (collections ? collections : []);
+	this.filter = filter;
 	Object.defineProperty(this,"length",{set:function() {},get:function() { if(this.collections.length===0){ return 0; } if(this.start!==undefined && this.end!==undefined) { return this.end - this.start; }; var size = 1; this.collections.forEach(function(collection) { size *= collection.length; }); return size; }});
 	Object.defineProperty(this,"size",{set:function() {},get:function() { return this.length; }});
 }
+// there is probably an alogorithm that never returns null is index is in range and takes into account the restrict right
 CXProduct.prototype.get = function(index){
-	function get(n,collections,dm,c) {
-		for (var i=collections.length;i--;)c[i]=collections[i][(n/dm[i][0]<<0)%dm[i][1]];
-	}
 	var me = this, c = [];
+	function get(n,collections,dm,c) {
+		for (var i=collections.length;i--;) c[i]=collections[i][(n/dm[i][0]<<0)%dm[i][1]];
+	}
 	for (var dm=[],f=1,l,i=me.collections.length;i--;f*=l){ dm[i]=[f,l=me.collections[i].length];  }
 	get(index,me.collections,dm,c);
-	return c.slice(0);
+	if(me.filter(c)) {
+		return c.slice(0);
+	}
 }
 class Cursor {
 	constructor(classes,cxproduct,projection,classVarMap) {
@@ -91,74 +94,86 @@ class Cursor {
 		this.classVarMap = classVarMap;
 		this.position = 0;
 	}
-	async forEach(f) {
-		let cursor = this;
-		return new Promise((resolve,reject) => {
-			let i = 0;
-			function rows() {
-				cursor.get(i).then((row) => {
-					if(row) {
-						f(row,i,cursor);
-						i++;
+	forEach(f) {
+		let cursor = this,
+			i = 0;
+		function rows() {
+			let row = cursor.get(i);
+			if(row) {
+				f(row,i,cursor);
+			}
+			i++;
+			if(i<cursor.cxproduct.length) {
+				rows();
+			}
+		}
+		rows();
+		return i;
+	}
+	every(f) {
+		let cursor = this,
+			i = 0,
+			result = false;
+		function rows() {
+			let row = cursor.get(i);
+			if(row) {
+				if(f(row,i,cursor)) {
+					i++;
+					if(i<cursor.cxproduct.length) {
 						rows();
-					} else {
-						resolve(true);
+						return;
 					}
-				});
+				}
+			} else {
+				i++;
+				if(i<cursor.cxproduct.length) {
+					rows();
+					return;
+				}
 			}
-			rows();
-		});
+			result = i===cursor.cxproduct.length;
+		}
+		rows();
+		return result;
 	}
-	async every(f) {
-		let cursor = this;
-		return new Promise((resolve,reject) => {
-			let i = 0;
-			function rows() {
-				cursor.get(i).then((row) => {
-					if(row) {
-						if(f(row,i,cursor)) {
-							i++;
-							rows();
-						}
-					} else {
-						resolve(i===cursor.count);
-					}
-				});
+	some(f) {
+		let cursor = this,
+		i = 0,
+		result = false;
+		function rows() {
+			let row = cursor.get(i);
+			if(row) {
+				if(f(row,i,cursor)) {
+					result = true;
+					return;
+				}
 			}
-			rows();
-		});
-	}
-	async some(f) {
-		let cursor = this;
-		return new Promise((resolve,reject) => {
-			let i = 0;
-			function rows() {
-				cursor.get(i).then((row) => {
-					if(row) {
-						if(f(row,i,cursor)) {
-							resolve(true)
-						} else {
-							i++;
-							rows();
-						}
-					} else {
-						resolve(false);
-					}
-				});
+			i++;
+			if(i<cursor.cxproduct.length) {
+				rows();
+			} else {
+				result = false;
+				return;
 			}
-			rows();
-		});
+		}
+		rows();
+		return result;
 	}
 	get count() {
-		return this.cxproduct.length;
+		let cursor = this,
+			i = 0;
+		cursor.forEach((row) => {
+			i++;
+		});
+		return i;
 	}
-	async get(rowNumber) {
+	get(rowNumber) {
 		let me = this;
 		if(rowNumber>=0 && rowNumber<me.cxproduct.length) {
-			return new Promise((resolve,reject) => {
+		//	return new Promise((resolve,reject) => {
 				let promises = [],
 					row = me.cxproduct.get(rowNumber);
-				if(me.projection) {
+				if(row && me.projection) {
 					let result = {};
 					Object.keys(me.projection).forEach((property) => {
 						let colspec = me.projection[property];
@@ -169,11 +184,11 @@ class Cursor {
 							result[property] = row[col][key];
 						}
 					});
-					resolve(result);
+					return result;
 				} else {
-					resolve(row);
+					return row;
 				}
-			});
+		//	});
 		}
 	}
 }
@@ -267,7 +282,7 @@ class Index {
 		}
 		return this.__metadata__.loaded;
 	}
-	async match(pattern,restrictToIds,classVars={},parentKey) {
+	async match(pattern,restrictToIds,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey) {
 		let index = this,
 			cls = pattern.$class,
 			clstype = typeof(cls),
@@ -279,7 +294,8 @@ class Index {
 			subobjects = {},
 			joinvars = {},
 			joins = {},
-			results;
+			cols = {},
+			results = classMatches;
 		if(clstype==="string") {
 			cls = index.__indextadata__.scope[cls];
 			if(!cls) {
@@ -296,6 +312,11 @@ class Index {
 		if(cls) {
 			clsprefix = (cls ? cls.name + "@" : undefined);
 		}
+		Object.keys(classVars).forEach((classVar,i) => {
+			cols[classVar] = i;
+			if(!results[classVar]) { results[classVar] = null; }
+			if(!restrictRight[i]) { restrictRight[i] = {}; };
+		});
 		keys.forEach((key) => {
 			let value = pattern[key],
 				type = typeof(value);
@@ -313,7 +334,7 @@ class Index {
 					value = pattern[key],
 					type = typeof(value);
 				if(!node) {
-					results = [];
+					results[classVar] = [];
 					return false;
 				}
 				if(key==="$class") {
@@ -324,7 +345,7 @@ class Index {
 				}
 				let first = Object.keys(value)[0];
 				if(classVars[first]) {
-					return joins[i] = {rightIndex:classVars[first].index, rightProperty:value[first], test:Index.$eeq};
+					return joins[i] = {rightVar:first, rightIndex:classVars[first].index, rightProperty:value[first], test:Index.$eeq};
 					//return joins[i] = true;
 				}
 				if(first[0]==="$") {
@@ -334,7 +355,7 @@ class Index {
 						if(typeof(testvalue)==="object") {
 							let second = Object.keys(testvalue)[0];
 							if(classVars[second]) {
-								return joins[i] = {rightIndex:classVars[second].index, rightProperty:testvalue[second], test:test};
+								return joins[i] = {rightVar:second, rightIndex:classVars[second].index, rightProperty:testvalue[second], test:test};
 								//return joins[i] = true;
 							}
 						}
@@ -344,21 +365,21 @@ class Index {
 				}
 				return subobjects[i] = true;
 			});
-			if(results && results.length===0) { resolve([]); return; }
+			if(results[classVar] && results[classVar].length===0) { resolve([]); return; }
 			nodes.every((node,i) => {
 				if(!literals[i]) { return true; }
 				let key = keys[i],
 					value = pattern[key],
 					type = typeof(value);
 				if(!node[value] || !node[value][type]) { 
-					results = []; 
+					results[classVar] = []; 
 					return false;
 				}
 				let ids = Object.keys(node[value][type]);
-				results = (results ? intersection(results,ids) : ids);
-				return results.length > 0;
+				results[classVar] = (results[classVar] ? intersection(results[classVar],ids) : ids);
+				return results[classVar].length > 0;
 			});
-			if(results && results.length===0) { resolve([]); return; }
+			if(results[classVar] && results[classVar].length===0) { resolve([]); return; }
 			nodes.every((node,i) => {
 				if(!tests[i]) { return true; }
 				let key = keys[i],
@@ -374,10 +395,10 @@ class Index {
 						}
 					});
 				});
-				results = (results ? intersection(results,ids) :  intersection(ids,ids));
-				return results.length > 0;
+				results[classVar] = (results[classVar] ? intersection(results[classVar],ids) :  intersection(ids,ids));
+				return results[classVar].length > 0;
 			});
-			if(results && results.length===0) { resolve(results); return; }
+			if(results[classVar] && results[classVar].length===0) { resolve([]); return; }
 			promises = [];
 			let childnodes = [];
 			nodes.every((node,i) => {
@@ -385,7 +406,7 @@ class Index {
 				let key = keys[i],
 					subobject = pattern[key];
 				childnodes.push(node);
-				promises.push(index.match(subobject,Object.keys(node),classVars,key));
+				promises.push(index.match(subobject,Object.keys(node),classVars,classMatches,restrictRight,classVar + "$" + subobject.constructor.name,key));
 			});
 			Promise.all(promises).then((childidsets) => {
 				childidsets.every((childids,i) => {
@@ -399,40 +420,49 @@ class Index {
 							ids = (ids ? ids.push(index[id]) : [index[id]]); // not sure about this line
 						}
 					});
-					results = (results ? intersection(results,ids) : intersection(ids,ids));
-					return results.length > 0;
+					results[classVar] = (results[classVar] ? intersection(results[classVar],ids) : intersection(ids,ids));
+					return results[classVar].length > 0;
 				});
-				if(results && results.length===0) { resolve([]); return;}
+				if(results[classVar] && results[classVar].length===0) { resolve([]); return;}
 				promises = [];
 				nodes.forEach((node,i) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
 					if(!joins[i]) { return true; }
 					promises.push(joins[i].rightIndex.get(joins[i].rightProperty));
 				});
-				Promise.all(promises).then((rightnodes) => {
+				Promise.all(promises).then((rightnodes) => { // variable not used, promises just ensure nodes loaded for matching
 					nodes.every((node,i) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
 						if(!joins[i]) { return true; }
-						let join = joins[i], // {rightIndex:classVars[second].index, rightProperty:testvalue[second], test:test};
-							ids = [];
+						let join = joins[i]; // {rightVar: second, rightIndex:classVars[second].index, rightProperty:testvalue[second], test:test};
 						if(!join.rightIndex[join.rightProperty]) {
-							results = [];
+							results[classVar] = [];
 							return false;
 						}
+						let leftids = [];
 						Object.keys(node).forEach((leftValue) => {
+							let innerleftids = [],
+								rightids = [];
 							Object.keys(node[leftValue]).forEach((leftType) => {
 								Object.keys(join.rightIndex[join.rightProperty]).forEach((rightValue) => {
 									Object.keys(join.rightIndex[join.rightProperty][rightValue]).forEach((rightType) => {
 										if(join.test(Index.coerce(leftValue,leftType),Index.coerce(rightValue,rightType))) { 
-											ids = ids.concat(Object.keys(node[leftValue][leftType]));
+											rightids = rightids.concat(Object.keys(join.rightIndex[join.rightProperty][rightValue][rightType]));
+											innerleftids = innerleftids.concat(Object.keys(node[leftValue][leftType]));
 										}
 									});
 								});
-								
 							});
+							if(rightids.length>0) {
+								innerleftids.forEach((id,i) => {
+									restrictRight[cols[join.rightVar]][id] = (restrictRight[cols[join.rightVar]][id] ? intersection(restrictRight[cols[join.rightVar]][id],rightids) : rightids);
+								});
+								classMatches[join.rightVar] = (classMatches[join.rightVar] ? classMatches[join.rightVar].concat(rightids) : rightids);
+							}
+							leftids = leftids.concat(innerleftids);
 						});
-						results = (results ? intersection(results,ids) : intersection(ids,ids));
-						return results.length > 0;
+						results[classVar] = (results[classVar] ? intersection(results[classVar],leftids) : leftids);
+						return results[classVar] && results[classVar].length > 0;
 					});
-					if(results && results.length>0) { resolve(results); return; }
+					if(results[classVar] && results[classVar].length>0) { resolve(results[classVar]); return; }
 					resolve([]);
 				});
 			});
@@ -455,9 +485,9 @@ class Index {
 				await index.__metadata__.store.set(id,object);
 			}
 			keys.forEach((key) => {
-				if(key===keyProperty) {
-					return;
-				}
+			//	if(key===keyProperty) {
+			//		return;
+			//	}
 				let value = object[key],
 					desc = Object.getOwnPropertyDescriptor(object,key);
 				function get() {
@@ -947,6 +977,7 @@ class Database {
 								let ordering = arguments[0];
 								return new Promise((resolve,reject) => {
 									let matches = {},
+										restrictright = {},
 										matchvars = [],
 										promises = [];
 									Object.keys(pattern).forEach((classVar) => {
@@ -958,15 +989,16 @@ class Database {
 										if(classVar===restrictVar) {
 											restrictions = [instanceId];
 										}
-										promises.push(classVars[classVar].index.match(pattern[classVar],restrictions,classVars));
+										promises.push(classVars[classVar].index.match(pattern[classVar],restrictions,classVars,matches,restrictright,classVar));
 									});
 									Promise.all(promises).then((results) => {
 										let pass = true;
-										results.forEach((result,i) => {
-											matches[matchvars[i]] = result;
+										results.every((result,i) => {
+										//	matches[matchvars[i]] = (matches[matchvars[i]] ? intersection(matches[matchvars[i]],result) : result);
 											if(result.length===0) {
 												pass = false;
 											}
+											return pass;
 										});
 										if(!pass) {
 											resolve(new Cursor([],new CXProduct([]),projection,{}),matches);
@@ -978,7 +1010,9 @@ class Database {
 												classVarMap = {};
 											Object.keys(matches).forEach((classVar) => {
 												vars.push(classVar);
-												promises.push(classVars[classVar].index.instances(matches[classVar]));
+												if(classVars[classVar]) {
+													promises.push(classVars[classVar].index.instances(matches[classVar]));
+												}
 											});
 											Promise.all(promises).then((results) => {
 												results.forEach((result,i) => {
@@ -989,7 +1023,16 @@ class Database {
 													collections.push(matches[classVar]);
 													classVarMap[classVar] = i;
 												});
-												resolve(new Cursor(classes,new CXProduct(collections),projection,classVarMap),matches);
+												function filter(row) {
+													return row.every((item,i) => {
+														if(i===0 || !restrictright[i]) {
+															return true;
+														}
+														let prev = row[i-1][db.keyProperty];
+														return !restrictright[i][prev] || restrictright[i][prev].indexOf(item[db.keyProperty])>=0;
+													});
+												}
+												resolve(new Cursor(classes,new CXProduct(collections,filter),projection,classVarMap),matches);
 											});
 										}
 									});

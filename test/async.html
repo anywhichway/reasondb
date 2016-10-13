@@ -54,7 +54,7 @@ let db = new Database("Test","@key",LocalStore,true,true); //MemStore, LocalStor
 	let promises = [i.put(p2),i.put(o1),i.put(p1),i.put(p3)]; //i.put(p2),i.put(o1),i.put(p1),i.put(p3)
 
 					Promise.all(promises).then((results) => {
-						describe("matches", function() {
+						/*describe("matches", function() {
 							it('{birthday: {month:0}}', function(done) {
 								i.match({birthday: {month:0}}).then((results) => {
 									i.instances(results).then((results) => {
@@ -284,35 +284,23 @@ let db = new Database("Test","@key",LocalStore,true,true); //MemStore, LocalStor
 									done();
 								});
 							});
-						});
+						});*/
 						describe("queries", function() {
 							it('query select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).from({$o: Object}', function(done) {
 								let promises = [];
 								db.select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).orderBy({$o1: {name: "asc"}}).exec().then((cursor) => {
-									promises.push(cursor.forEach((row,i) => {
-										console.log(row,i);
-									}));
-									promises.push(cursor.every((row,i) => {
-										return row.name === "Joe";
-									}));
-									promises.push(cursor.some((row,i) => {
-										return row.name === "Joe";
-									}));
-									Promise.all(promises).then((results) => {
-										expect(results.every((item) => { return item===true; })).to.equal(true);
-										expect(cursor.count===1);
-										done();
-									});
+									expect(cursor.every((row) => { return row.name==="Joe"; })).to.equal(true);
+									expect(cursor.some((row) => { return row.name==="Joe"; })).to.equal(true);
+									expect(cursor.count===1);
+									done();
 								});
 							});
-							it('join select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}}', function(done) {
-								db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}}).exec().then((cursor) => {
-									cursor.forEach((row,i) => {
-										console.log("join",row,i);
-									}).then(() => {
-										console.log("ok join");
-										done();
-									});
+							it('join select().from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}}', function(done) {
+								db.select().from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}, "@key": {$neq: {$o2: "@key"}}}}).exec().then((cursor) => {
+									expect(cursor.every((row,i) => {
+										return row[0].name===row[1].name;
+									})).to.equal(true);
+									done();
 								});
 							});
 							it('where: {$e1: {name: {$eq: "Joe"}}}', function(done) {
@@ -341,53 +329,42 @@ let db = new Database("Test","@key",LocalStore,true,true); //MemStore, LocalStor
 							});
 							it('where: {$e1: {name: {$e2: "name"}}}', function(done) {
 								db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$e2: "name"}}}).exec().then((cursor) => { 
-									expect(cursor.count).to.equal(4); 
+									expect(cursor.count).to.equal(8); 
 									done(); 
 								});
 							});
+							
 							it('where: {$e1: {name: {$eq: {$e2: "name"}}}}', function(done) {
 								db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: {$e2: "name"}}}}).exec().then((cursor) => { 
-									expect(cursor.count).to.equal(4); 
+									expect(cursor.count).to.equal(8); 
 									done(); 
 								});
 							});
 							it('where: {$e1: {name: {$neq: {$e2: "name"}}}}', function(done) {
 								db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-									expect(cursor.count).to.equal(4); 
+									expect(cursor.count).to.equal(8); 
 									done(); 
 								});
 							});
-							it('projection: {e1name: {$e1: "name"},e2name: {$e2: "name"}}', function(done) {
+							it('projection: {e1name: {$e1: "name"},e2name: {$e2: "name"}} {$e1: {name: {$eq: "Mary"}', function(done) {
 								this.timeout(3000);
 								db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Mary"}}, $e2: {name: {$eq: {$e1: "name"}}}})
 								.exec().then(function(cursor) {
-									//if(cursor instanceof Cursor) {
-										let p, promises = [], i = 0, max = cursor.count;
-										while(++i<max) {
-											promises.push(cursor.get(i));
-										}
-										Promise.all(promises).then((results) => {
-											if(results.every((row) => {
-												console.log("row",row)
-												return row.e1name==="Mary" && row.e2name==="Mary";
-											})) {
-												done();
-											}
-										});
-									//}
+									if(cursor instanceof Cursor) {
+										expect(cursor.every((row) => { 
+											return row.e1name==="Mary" && row.e2name==="Mary"; 
+										})).to.equal(true);
+										done();
+									}
 								});
 							});
 						});
 						describe("streaming", function() {
 							it('query select({name: {$o: "name"}}).from({$o: Object}).when({$o: {age: 26}}', function(done) {
-								db.select({name: {$o: "name"}}).from({$o: Object}).when({$o: {age: 26}}).then(function(cursor) {
-									if(cursor.forEach) {
-										cursor.forEach((row,i) => {
-											console.log("when",row,i);
-										}).then(() => {
-											console.log("ok when");
-											done();
-										});
+								db.select({age: {$o: "age"}}).from({$o: Object}).when({$o: {age: 26}}).then(function(cursor) {
+									if(cursor.every) {
+										expect(cursor.every((row) => { return row.age===26; })).to.equal(true);
+										done();
 									}
 								});
 								o1.age = 26;
