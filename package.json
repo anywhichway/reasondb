@@ -1,6 +1,6 @@
 {
   "name": "ReasonDB",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "An isomorphic, JSON database with a SQL like JOQULAR query syntax and streaming analytics.",
   "main": "lib/index.js",
   "client": "./browser/reasondb.js",

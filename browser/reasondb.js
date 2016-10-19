@@ -70,7 +70,11 @@ function _interopRequireDefault(obj) {
 }
 
 (function () {
-	var uuid = require("node-uuid");
+	var _uuid = void 0;
+	if (typeof window === "undefined") {
+		var r = require;
+		_uuid = require("node-uuid");
+	}
 
 	Array.indexKeys = ["length", "$max", "$min", "$avg", "*"];
 	Array.reindexCalls = ["push", "pop", "splice", "reverse", "fill", "shift", "unshift"];
@@ -811,7 +815,7 @@ function _interopRequireDefault(obj) {
 									index = this, keyProperty = index.__metadata__.store.keyProperty(), keys = Index.keys(object), id = object[keyProperty], promises = [];
 
 									if (!id) {
-										id = object[keyProperty] = object.constructor.name + "@" + uuid.v4();
+										id = object[keyProperty] = object.constructor.name + "@" + (_uuid ? _uuid.v4() : uuid.v4());
 									}
 
 									if (!(index[id] !== object)) {
@@ -863,7 +867,7 @@ function _interopRequireDefault(obj) {
 																	}
 																} else {
 																	if (!value[keyProperty]) {
-																		value[keyProperty] = value.constructor.name + "@" + uuid.v4();
+																		value[keyProperty] = value.constructor.name + "@" + (_uuid ? _uuid.v4() : uuid.v4());
 																	}
 																	if (!node[value[keyProperty]]) {
 																		node[value[keyProperty]] = {};
@@ -1149,7 +1153,7 @@ function _interopRequireDefault(obj) {
 					(function () {
 						var id = value[keyProperty];
 						if (!id) {
-							value[keyProperty] = id = value.constructor.name + "@" + uuid.v4();
+							value[keyProperty] = id = value.constructor.name + "@" + (_uuid ? _uuid.v4() : uuid.v4());
 						}
 						var json = value.toJSON ? value.toJSON() : value;
 						if ((typeof json === "undefined" ? "undefined" : (0, _typeof3.default)(json)) !== "object") {
@@ -1358,8 +1362,8 @@ function _interopRequireDefault(obj) {
 			if (typeof window !== "undefined") {
 				_this3.__metadata__.storage = window.localStorage;
 			} else {
-				var r = require,
-				    LocalStorage = r("./LocalStorage.js").LocalStorage;
+				var _r = require,
+				    LocalStorage = _r("./LocalStorage.js").LocalStorage;
 				_this3.__metadata__.storage = new LocalStorage("./db/" + name);
 			}
 			if (clear) {
@@ -1508,8 +1512,8 @@ function _interopRequireDefault(obj) {
 				window.localforage.config({ name: name });
 				_this4.__metadata__.storage = window.localforage;
 			} else {
-				var r = require,
-				    LocalStorage = r("node-localstorage").LocalStorage;
+				var _r2 = require,
+				    LocalStorage = _r2("node-localstorage").LocalStorage;
 				_this4.__metadata__.storage = new LocalStorage("./db/" + name);
 			}
 			if (clear) {

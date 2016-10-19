@@ -1,8 +1,19 @@
 (function() {
-	let uuid = require("node-uuid");
+	let _uuid;
+	if(typeof(window)==="undefined") {
+		let r = require;
+		_uuid = require("node-uuid");
+	}
 
 	Array.indexKeys = ["length","$max","$min","$avg","*"];
 	Array.reindexCalls = ["push","pop","splice","reverse","fill","shift","unshift"];
+	Array.fromJSON = function(json) {
+		let array = [];
+		Object.keys(json).forEach((key) => {
+			array[key] = json[key];
+		});
+		return array;
+	}
 	Object.defineProperty(Array.prototype,"$max",{enumerable:false,configurable:true,
 		get:function() { let result; this.forEach((value) => { result = (result!=null ? (value > result ? value : result) : value); }); return result;},
 		set:function() { }
@@ -28,6 +39,15 @@
 	
 	Date.indexKeys = [];
 	Date.reindexCalls = [];
+	Date.fromJSON = function(json) {
+		let dt = new Date(json.time);
+		Object.keys(json).forEach((key) => {
+			if(key!=="time") {
+				dt[key] = json[key];
+			}
+		});
+		return dt;
+	}
 	Object.getOwnPropertyNames(Date.prototype).forEach((key) => {
 		if(key.indexOf("get")===0) {
 			let name = (key.indexOf("UTC")>=0 ? key.slice(3) : key.charAt(3).toLowerCase() + key.slice(4)),
@@ -199,10 +219,7 @@
 		constructor(cls,keyProperty="@key",db,StorageType=(db ? db.storageType : MemStore),clear=(db ? db.clear : false)) {
 			let store = new StorageType(cls.name,keyProperty,db,clear);
 			cls.index = this;
-			this.__metadata__ = {
-				store:store,
-				name: cls.name
-			};
+			Object.defineProperty(this,"__metadata__",{value:{store:store,name:cls.name}});
 		}
 		static coerce(value,type) {
 			let conversions = {
@@ -244,6 +261,16 @@
 			}
 			return Object.keys(object);
 		}
+		async clear() {
+			let index = this,
+				promises = [];
+			Object.keys(index).forEach((key) => {
+				promises.push(index.delete(key));
+			});
+			return new Promise((resolve,reject) => {
+				Promise.all(promises).then(() => { resolve(); });
+			});
+		}
 		async delete(key) {
 			let desc = Object.getOwnPropertyDescriptor(this,key);
 			if(desc) {
@@ -254,13 +281,13 @@
 		flush(key) {
 			let desc = Object.getOwnPropertyDescriptor(this,key);
 			if(desc) {
-				desc[key] = false;
+				this[key] = false;
 			}
 		}
 		async get(key) {
 			let value = this[key];
 			if(!value) {
-				return this.__metadata__.store.get(key);
+				value = this[key] = await this.__metadata__.store.get(key);
 			}
 			return Promise.resolve(value);
 		}
@@ -274,16 +301,14 @@
 		}
 		async load() {
 			let me = this;
-			if(!this.__metadata__.loaded) {
-				let keys =  await this.__metadata__.store.get(key);
-				if(keys) {
-					Object.keys(keys).forEach((key) => {
-						me[key] = keys[key];
-					});
-				}
-				this.__metadata__.loaded = true;
+			if(!me.__metadata__.loaded) {
+				let keyvalues =  await me.__metadata__.store.load();
+				keyvalues.forEach((kv) => {
+					me[kv[0]] = kv[1];
+				});
+				me.__metadata__.loaded = true;
 			}
-			return this.__metadata__.loaded;
+			return me.__metadata__.loaded;
 		}
 		async match(pattern,restrictToIds,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey) {
 			let index = this,
@@ -299,6 +324,7 @@
 				joins = {},
 				cols = {},
 				results = classMatches;
+			await index.load();
 			if(clstype==="string") {
 				cls = index.__indextadata__.scope[cls];
 				if(!cls) {
@@ -488,7 +514,7 @@
 					id = object[keyProperty],
 					promises = [];
 				if(!id) {
-					id = object[keyProperty] = object.constructor.name +  "@" + uuid.v4();
+					id = object[keyProperty] = object.constructor.name +  "@" + (_uuid ? _uuid.v4() : uuid.v4());
 				}
 				if(index[id]!==object) {
 					index[id] = object;
@@ -533,7 +559,7 @@
 												}
 											} else {
 												if(!value[keyProperty]) {
-													value[keyProperty] = value.constructor.name +  "@" + uuid.v4();
+													value[keyProperty] = value.constructor.name +  "@" + (_uuid ? _uuid.v4() : uuid.v4());
 												}
 												if(!node[value[keyProperty]]) {
 													node[value[keyProperty]] = {};
@@ -703,7 +729,7 @@
 			if(value && type==="object") {
 				let id = value[keyProperty]
 				if(!id) {
-					value[keyProperty] = id = value.constructor.name +  "@" + uuid.v4();
+					value[keyProperty] = id = value.constructor.name +  "@" + (_uuid ? _uuid.v4() : uuid.v4());
 				}
 				let json = (value.toJSON ? value.toJSON() : value);
 				if(typeof(json)!=="object") {
@@ -727,38 +753,94 @@
 			}
 			return result;
 		}
-		restore(json) {
-			let me = this;
-			if(json && typeof(json)==="object") {
-				let key = json[me.keyProperty()];
+		// add cache support to prevent loops
+		async restore(json,recurse,cache={}) { 
+			let me = this,
+				type = typeof(json);
+			if(json && type==="object") {
+				let key = json[me.keyProperty()],
+					keys = Object.keys(json),
+					keymap = {},
+					promises = [];
 				if(typeof(key)==="string") {
 					let parts = key.split("@"),
 						cls = me.__metadata__.scope[parts[0]];
 					if(!cls) {
 						try {
-							me.__metadata__.scope[parts[0]] = cls = Function("return " + parts[0]);
+							me.__metadata__.scope[parts[0]] = cls = Function("return " + parts[0])();
 						} catch(e) {
-							Object.keys(json).forEach((property) => {
-								json[property] = me.restore(json[property]);
+							keys.forEach((property,i) => {
+								keymap[i] = property;
+								promises.push(me.restore(json[property],true,cache));
 							});
-							return json;
+							return new Promise((resolve,reject) => {
+								Promise.all(promises).then((results) => {
+									results.forEach((data,i) => {
+										json[keymap[i]] = data;
+									});
+									resolve(json);
+								});
+							});
+							
 						}
-						me.__metadata__.scope[parts[0]] = cls;
 					}
-					if(json instanceof cls) {
-						Object.keys(json).forEach((property) => {
-							json[property] = me.restore(json[property]);
+					
+					if(keys.length===1) {
+						let object = await me.get(key);
+						if(object instanceof cls) {
+							return Promise.resolve(object);
+						}
+						if(cls.fromJSON) {
+							return Promise.resolve(cls.fromJSON(object));
+						}
+						let instance = Object.create(cls.prototype);
+						if(object && typeof(object)==="object") {
+							Object.keys(object).forEach((property,i) => {
+								keymap[i] = property;
+								promises.push(me.restore(object[property],true,cache));
+							});
+						}
+						return new Promise((resolve,reject) => {
+							Promise.all(promises).then((results) => {
+								results.forEach((data,i) => {
+									instance[keymap[i]] = data;
+								});
+								resolve(instance);
+							});
 						});
-						return json;
+					} else if(json instanceof cls) {
+							keys.forEach((property,i) => {
+								keymap[i] = property;
+								promises.push(me.restore(json[property],true,cache));
+							});
+							return new Promise((resolve,reject) => {
+								Promise.all(promises).then((results) => {
+									results.forEach((data,i) => {
+										json[keymap[i]] = data;
+									});
+									resolve(json);
+								});
+							});
+					} else if(cls.fromJSON) {
+							return Promise.resolve(cls.fromJSON(json));
+					} else {
+						let instance = Object.create(cls.prototype);
+						keys.forEach((property,i) => {
+							keymap[i] = property;
+							promises.push(me.restore(json[property],true,cache));
+						});
+						return new Promise((resolve,reject) => {
+							Promise.all(promises).then((results) => {
+								results.forEach((data,i) => {
+									instance[keymap[i]] = data;
+								});
+								resolve(instance);
+							});
+						});
 					}
-					let instance = Object.create(cls.prototype);
-					Object.keys(json).forEach((property) => {
-						instance[property] = me.restore(json[property]);
-					});
-					return instance;
 				}
 			}
-			return json;
+			return Promise.resolve(json);
 		}
 	}
 	class MemStore extends Store {
@@ -778,6 +860,9 @@
 		}
 		async get(key) {
 			return this[key];
+		}
+		async load() {
+			return true;
 		}
 		async set(key,value) {
 			this[key] = value;
@@ -800,7 +885,7 @@
 		}
 		async clear() {
 			let me = this;
-				me.__metadata__.storage.clear();
+			me.__metadata__.storage.clear();
 			Object.keys(me).forEach((key) => {
 				delete me[key];
 			});
@@ -808,7 +893,7 @@
 		}
 		async delete(key,force) {
 			if(this[key] || force) {
-				me.__metadata__.storage.removeItem(key+".json");
+				this.__metadata__.storage.removeItem(key+".json");
 				delete this[key];
 				return true;
 			}
@@ -818,8 +903,23 @@
 			let value = this.__metadata__.storage.getItem(key+".json");
 			if(value!=null) {
 				this[key] = true;
-				return this.restore(JSON.parse(value));
+				return await this.restore(JSON.parse(value));
 			}
+		}
+		async load() {
+			let me = this,
+				storage = this.__metadata__.storage;
+				promises = [];
+			for(var i=0;i<storage.length;i++) {
+				let key = storage.key(i).replace(".json",""),
+					value = false;
+				if(key.indexOf("@")===-1) {
+					value = await me.get(key);
+				}
+				me[key] = true;
+				promises.push(Promise.resolve([key,value]));
+			}
+			return Promise.all(promises);
 		}
 		async set(key,value,normalize) {
 			this[key] = true;
@@ -850,8 +950,9 @@
 			return true;
 		}
 		async delete(key,force) {
+			let index = this;
 			if(this[key] || force) {
-				await me.__metadata__.storage.removeItem(key+".json");
+				await index.__metadata__.storage.removeItem(key+".json");
 				delete this[key];
 				return true;
 			}
@@ -861,7 +962,7 @@
 			let value = await this.__metadata__.storage.getItem(key+".json");
 			if(value!=null) {
 				this[key] = true;
-				return this.restore(value);
+				return await this.restore(value);
 			}
 		}
 		async set(key,value,normalize) {
@@ -875,8 +976,9 @@
 			let db = this;
 			db.keyProperty = keyProperty;
 			db.storageType = storageType;
-			db.clear = true;
+			db.clear = clear;
 			db.shared = shared;
+			db.classes = {};
 			
 			delete Object.index;
 			db.index(Object,keyProperty,storageType,clear);
@@ -933,6 +1035,12 @@
 			}
 			db.patterns = {};
 		}
+		async deleteIndex(cls) {
+			if(cls.index) {
+				await cls.index.clear();
+				delete cls.index;;
+			}
+		}
 		index(cls,keyProperty,storageType,clear) {
 			let db = this;
 			keyProperty = (keyProperty ? keyProperty : db.keyProperty);
@@ -940,7 +1048,7 @@
 			clear = (clear ? clear : db.clear);
 			if(!cls.index) { 
 				cls.index = new Index(cls,keyProperty,db,storageType,clear);
-				db[cls.name] = cls;
+				db.classes[cls.name] = cls;
 			}
 		}
 		select(projection) {
