@@ -2,19 +2,19 @@
 <head>
 <meta charset="utf-8">
 <link rel="stylesheet" media="all" href="../node_modules/mocha/mocha.css">
-</head>
-<body>
-<div id="mocha"></div>
-<div id="messages"></div>
-<div id="fixtures"></div>
 <script src="../node_modules/mocha/mocha.js" type="text/javascript"></script>
 <script src="../node_modules/chai/chai.js" type="text/javascript"></script>
 <script src="../node_modules/localforage/dist/localforage.js"></script>
 <script src="../node_modules/node-uuid/uuid.js"></script>
-<script src="../src/index.js"></script>
-<!!script src="../browser/reasondb.js"><!!/script>
+<!-- script src="../node_modules/bluebird/js/browser/bluebird.js"></script -->
+<!-- script src="../../src/index.js"></script -->
+<script src="../browser/reasondb.js"></script>
 </head>
 <body>
+Test cases populate localStorage in Chrome and Firefox. Review localStorage using browsers debugging tools to see database structure after running tests.
+<div id="mocha"></div>
+<div id="messages"></div>
+<div id="fixtures"></div>
 <script>
 mocha.setup('bdd');
 var expect = chai.expect;
@@ -25,9 +25,5 @@ var expect = chai.expect;
 <script>
 mocha.run();
 </script>
-</body>
-</html>
-
-
 </body>
 </html>
