@@ -1,7 +1,7 @@
 {
   "name": "ReasonDB",
   "version": "0.0.3",
-  "description": "An isomorphic, JSON database with a SQL like JOQULAR query syntax and streaming analytics.",
+  "description": "A 100% native JavaScript client and server database with a SQL like syntax, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, fully indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 45K.",
   "main": "lib/index.js",
   "client": "./browser/reasondb.js",
   "reveal": true,

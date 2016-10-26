@@ -2587,6 +2587,7 @@ SOFTWARE.
 										instance = thecls.fromJSON(object);
 									} else {
 										instance = (0, _create2.default)(thecls.prototype);
+										Object.defineProperty(instance, "constructor", { configurable: true, writable: true, value: thecls });
 										(0, _keys2.default)(object).forEach(function (key) {
 											instance[key] = object[key];
 										});
