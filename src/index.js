@@ -162,7 +162,6 @@ SOFTWARE.
 			this.cxproduct = cxproduct;
 			this.projection = projection;
 			this.classVarMap = classVarMap;
-			this.position = 0;
 		}
 		forEach(f) {
 			let cursor = this,
@@ -229,7 +228,7 @@ SOFTWARE.
 			rows();
 			return result;
 		}
-		get count() {
+		count() {
 			let cursor = this,
 				i = 0;
 			cursor.forEach((row) => {
@@ -264,6 +263,9 @@ SOFTWARE.
 						return row;
 					}
 			}
+		}
+		get maxCount() {
+			return this.cxproduct.length;
 		}
 	}
 	function stream(object,db) {

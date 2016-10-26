@@ -284,31 +284,31 @@ promise.then((results) => {
 		describe("queries (all match criteria above also supported)", function() {
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).exec().then((cursor) => { 
-					expect(cursor.count).to.equal(2); 
+					expect(cursor.count()).to.equal(2); 
 					done(); 
 				});
 			});
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$: (v) => { return v==="Joe"; }}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$: (v) => { return v==="Joe"; }}}}).exec().then((cursor) => { 
-					expect(cursor.count).to.equal(2); 
+					expect(cursor.count()).to.equal(2); 
 					done(); 
 				});
 			});
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"},birthday:{date:15,day:1}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"},birthday:{date:15,day:1}}}).exec().then((cursor) => { 
-					expect(cursor.count).to.equal(1); 
+					expect(cursor.count()).to.equal(1); 
 					done(); 
 				});
 			});
 			it('db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}})', function(done) {
 			 db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec().then((cursor) => {
-   			  	expect(cursor.count>0).to.equal(true); 
+   			  	expect(cursor.count()>0).to.equal(true); 
 				done(); 
 			 });
 			});
 			it('db.select().from({$o1: Object,$o2: Object}).where({$o1: {name: {$neq: {$o2: "name"}}, "@key": {$neq: {$o2: "@key"}}}, $o2: {name: {$neq: null}}})', function(done) {
 				db.select().from({$o1: Object,$o2: Object}).where({$o1: {name: {$neq: {$o2: "name"}}, "@key": {$neq: {$o2: "@key"}}}, $o2: {name: {$neq: null}}}).exec().then((cursor) => {
-					expect(cursor.count>0).to.equal(true);
+					expect(cursor.count()>0).to.equal(true);
 					expect(cursor.every((row,i) => {
 						return row[0]["@key"]!==row[1]["@key"] && row[0].name!==row[1].name;
 					})).to.equal(true);
@@ -317,13 +317,13 @@ promise.then((results) => {
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$eq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$eq: "Joe"}}}).exec().then((cursor) => { 
-					expect(cursor.count).to.equal(4); 
+					expect(cursor.count()).to.equal(4); 
 					done(); 
 				});	
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$neq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$neq: "Joe"}}}).exec().then((cursor) => { 
-					expect(cursor.count).to.equal(4); 
+					expect(cursor.count()).to.equal(4); 
 					done(); 
 				});	
 			});
@@ -332,14 +332,14 @@ promise.then((results) => {
 					expect(cursor.every((row) => {
 						return row[0].name!==row[1].name;
 					})).to.equal(true);
-					expect(cursor.count).to.equal(8);
+					expect(cursor.count()).to.equal(8);
 					done(); 
 				});
 				
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					expect(cursor.count).to.equal(8);
+					expect(cursor.count()).to.equal(8);
 					expect(cursor.every((row) => {
 						return row[0].name===row[1].name;
 					})).to.equal(true);
@@ -351,14 +351,14 @@ promise.then((results) => {
 					expect(cursor.every((row) => {
 						return row[0].name!==row[1].name;
 					})).to.equal(true); 
-					expect(cursor.count).to.equal(8);
+					expect(cursor.count()).to.equal(8);
 					done(); 
 				});
 			});
 			it('db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: {$e2: "name"}}}, $e2: {name: "Mary"}})', function(done) {
 				db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}, $e2: {name: "Mary"}})
 				.exec().then(function(cursor) {
-					expect(cursor.count>0).to.equal(true);
+					expect(cursor.count()>0).to.equal(true);
 					expect(cursor.every((row) => { 
 						return row.e1name==="Mary" && row.e2name==="Mary"; 
 					})).to.equal(true);
@@ -369,7 +369,7 @@ promise.then((results) => {
 				db.select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).orderBy({$o1: {name: "asc"}}).exec().then((cursor) => {
 					expect(cursor.every((row) => { return row.name==="Joe"; })).to.equal(true);
 					expect(cursor.some((row) => { return row.name==="Joe"; })).to.equal(true);
-					expect(cursor.count===1);
+					expect(cursor.count()===1);
 					done();
 				});
 			});*/
@@ -377,7 +377,7 @@ promise.then((results) => {
 		describe("streaming", function() {
 			it('when({$o: {stream: true}}).from({$o: Object}).select()', function(done) {
 				db.when({$o: {stream: true}}).from({$o: Object}).select().then(function(cursor) {
-					expect(cursor.count).to.equal(1);
+					expect(cursor.count()).to.equal(1);
 					expect(cursor.every((row) => { 
 						return row[0].stream===true; 
 					})).to.equal(true);
@@ -389,7 +389,7 @@ promise.then((results) => {
 			});
 			/*it('when({$o: {birthday: {month:1}}).from({$o: Object}).select()', function(done) {
 				db.when({$o: {birthday: {month:1}}}).from({$o: Object}).select().then(function(cursor) {
-					expect(cursor.count).to.equal(1);
+					expect(cursor.count()).to.equal(1);
 					expect(cursor.every((row) => { 
 						return row[0].birthday.getMonth()===1;
 					})).to.equal(true);

@@ -41,10 +41,12 @@ var ReasonDB;
 if(typeof(window)==="undefined") {
 	ReasonDB = require("../../lib/index.js"); // Load ReasonDB if running on the server.
 }
+
 // Create a database at the directory location provided using @key as the primary key on all objects.
 // Store data using localStorage. In the browser this is window.localStorage and the directory location is ignored.
 // On the server JSON files are created. The arguments `true` and `true` force the sharing of indexes across
 // objects and the creation of new storage and indexes each time the example is run.
+
 let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true,true);
 
 // Define a Person class. Classes are optional. ReasonDB can store items of type Object, Array, and Date by default.
@@ -102,58 +104,103 @@ Promise.all([
 
 Review other files in the example directory or the unit tests under the test directory for more examples. Examples and unit tests can be run in the browser by loading the index.html file. The same examples and tests can be run in node.js by executing the index.js file.
 
-**Note**: Mocha and Instanbul currently break with ReasonDB under NodeJS even though they work inthe browser. Test code is "decaffinated" prior to executing in NodeJS.
+**Note**: Mocha and Instanbul currently break with ReasonDB under NodeJS even though they work in the browser. Test code is "decaffinated" prior to executing in NodeJS.
 
 ## JOQULAR
 
+The notation below uses the following conventions:
+
+1) Elements replaced by the developer are contained in angle brackets, `< >`.
+
+2) Optional elements are further surrounded by square brackets, e.g. `[< >]`.
+
+3) Elipses, `...`, indicates the immediatly previous form can be repeated.
+
+### Patterns
+
+Query patterns take the top level form: `{<classVariable>: {<property>: {<predicate>: <value> [,...]} [,...} [,...}`.
+
+`classVariable` refers to a variable created in a `from` clause, e.g. `{$o1: Object}` creates the variable `$o1`. Variables must start with a `$` sign.
+
+`predicate` can be any of the supported predicates, see Predicates below.
+
+Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age betwen 18 and 20 inclusive in the states of Ohio, Indiana, and washington.
+
 ### Insert
 
-Inserting an object into the database activates it such that any subsequent changes to the object automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store.
+`db.insert(<object>).into(<indexed class>)[.as(<class>)].exec().then(() => { <function body> })`. `then` is chainable as a Promise.
+
+Inserting an object into the database activates it such a way that any subsequent changes to the object automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store. Inserted objects have a unique v4 uuid as the value for thier key property. The name of the key property is provided when creating a database.
 
 ### Delete
 
-Deleting an object from the database removes its unique key and removes it from the index and the persistent store.
+`db.delete().from({<classVariable>: <class> [,...]}).where(<pattern>).exec().then((count) => { <function body> })`. `then` is chainable as a Promise. `count` is the number of objects deleted.
+
+The `from` clause is an object the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
+
+See Patterns above for a description of the `where` clause.
+
+Deleting an object from the database removes its unique key and removes it from its index and the persistent store.
 
 ### Select
+
+`db.select([<projection>]).from({<classVariable>: <class>[,...]}).where(<pattern>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
+
+A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)` and a computational method, `count`. It also has the data element `maxCount`. `<function>` can be a normal function or a fat arrow function. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row by using an optionaly provided <projection>.
+
+The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
+
+See Patterns above for a general description of the `where` clause.
+
+In order to optimize memory and speed, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the acutal number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. Requiring a function call to get `count` is intended to have the programmer be thoughtful about its use. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop if far more efficient than first calling `count`.
+
+#### Projections
+
+
+#### Joins
+
 
 ### Update
 
 There is currently no update statement since updates to an object automatically update the database.
 
+### When - Streaming Analytics
+
+
+
 ### Predicates
 
-$ - Inline test, e.g. `{age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}`.
+*$* - Inline test, e.g. `{age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}`.
 
-$typeof - Ensures the value in a property is of the type specified, e.g. `{id: {$typeof: "number"}}`.
+*$typeof* - Ensures the value in a property is of the type specified, e.g. `{id: {$typeof: "number"}}`.
 
-$lt - Less than test, e.g. `{age: {$lt: 21}}`. Aliased to `<`, e.g. `{age: {"<": 21}}`.
+*$lt* - Less than test, e.g. `{age: {$lt: 21}}`. Aliased to `<`, e.g. `{age: {"<": 21}}`.
 
-$lte - Less than or equal test, e.g. `{age: {$lte: 21}}`. Aliased to `<=`, e.g. `{age: {"<=": 21}}`.
+*$lte* - Less than or equal test, e.g. `{age: {$lte: 21}}`. Aliased to `<=`, e.g. `{age: {"<=": 21}}`.
 
-$eq - Relaxed equal test, e.g. `{age: {$eq: 21}}` and `{age: {$eq: "21"}}` will match the same objects. Aliased to `==`.
+*$eq* - Relaxed equal test, e.g. `{age: {$eq: 21}}` and `{age: {$eq: "21"}}` will match the same objects. Aliased to `==`.
 
-$neq - Relaxed not equal test, e.g. `{age: {$neq: 21}}` or `{age: {$neq: "21"}}` will match the same objects. Aliased to `!=`.
+*$neq* - Relaxed not equal test, e.g. `{age: {$neq: 21}}` or `{age: {$neq: "21"}}` will match the same objects. Aliased to `!=`.
 
-$neeq - Not exact equal test, e.g. `{age: {$neq: 21}}` or `{age: {$neq: "21"}}` will not match the same objects since type is taken into consideration. Aliased to `!==`.
+*$neeq* (not yet implemented) - Not exact equal test, e.g. `{age: {$neq: 21}}` or `{age: {$neq: "21"}}` will not match the same objects since type is taken into consideration. Aliased to `!==`.
 
-$eeq - Exact equal test, e.g. `{age: {$eq: 21}}` and `{age: {$eq: "21"}}` will not match the same objects since type is taken into consideration. . Aliased to `===`.
-Index["==="] = $eeq;
+*$eeq* - Exact equal test, e.g. `{age: {$eq: 21}}` and `{age: {$eq: "21"}}` will not match the same objects since type is taken into consideration. . Aliased to `===`.
 
-$gte - Greater than or equal test, e.g. `{age: {$gte: 21}}`. Aliased to `>=`, e.g. `{age: {">=": 21}}`.
+*$gte* - Greater than or equal test, e.g. `{age: {$gte: 21}}`. Aliased to `>=`, e.g. `{age: {">=": 21}}`.
 
-$gt - Greater than test, e.g. `{age: {$gt: 21}}`. Aliased to `>`, e.g. `{age: {">": 21}}`.
+*$gt* - Greater than test, e.g. `{age: {$gt: 21}}`. Aliased to `>`, e.g. `{age: {">": 21}}`.
 
-$echoes - Implements soundex comparison, e.g. `{name:{$echoes:"Jo"}}` would match an object with `{name: "Joe"}`.
+*$echoes* - Implements soundex comparison, e.g. `{name:{$echoes:"Jo"}}` would match an object with `{name: "Joe"}`.
 
-$matches - Implements RegExp mathing, e.g. `{name:{$matches: <RegExp>}}`. RegExp can either be a regular expression using shorthand notation, or a string that looks like a regular expression, i.e starts and ends with `/`.
+*$matches* - Implements RegExp matching, e.g. `{name:{$matches: <RegExp>}}`. RegExp can either be a regular expression using shorthand notation, or a string that looks like a regular expression, i.e starts and ends with `/`.
 
-$in - Tests to see if a value is in the specified sequence, e.g. `{age:{$in:[24,25]}}` only matches 24 and 25. Types must match.
+*$in* - Tests to see if a value is in the specified sequence, e.g. `{age:{$in:[24,25]}}` only matches 24 and 25. Types must match.
 
-$nin - Tests to see if a value is not in the specified sequence, e.g. `{age:{$nin:[24,25]}}` matches everything except 24 and 25. Types must match.
+*$nin* - Tests to see if a value is not in the specified sequence, e.g. `{age:{$nin:[24,25]}}` matches everything except 24 and 25. Types must match.
 
-$between - Tests to see if a value is between the first and second elements, e.g. `{age:{$between:[24,25,true]}}`. The flag `true` includes the boundaries in the test. Types must match.
+*$between* - Tests to see if a value is between the first and second elements, e.g. `{age:{$between:[24,25,true]}}`. The flag `true` includes the boundaries in the test. Types must match.
 
-$outside - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match.
+*$outside* - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match.
 
 ### Array Matching
 
@@ -175,6 +222,12 @@ All the properties equivalent to the get methods on Date objects are indexed, e.
 
 ### Adding Persistence Engines
 
+## Internals
+
+### Index
+
+### Cursor
+
 ## Building & Testing
 
 Building, testing and quality assessment are conducted using Travis, Mocha, Chai, Istanbul, Code Climate, and Codacity.
@@ -185,6 +238,8 @@ For code quality assessment purposes, the cyclomatic complexity threshold is set
 
 
 ## Updates (reverse chronological order)
+
+2016-10-26 v0.0.4 Added documentation. Changed `count` on Cursor instances to a function and added `maxCount` as a data member. Not published to npm.
 
 2016-10-25 v0.0.3 First npm publication.
 
