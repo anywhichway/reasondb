@@ -1370,6 +1370,7 @@ SOFTWARE.
 									instance = thecls.fromJSON(object);
 								} else {
 									instance = Object.create(thecls.prototype);
+									Object.defineProperty(instance,"constructor",{configurable:true,writable:true,value:thecls});
 									Object.keys(object).forEach((key) => {
 										instance[key] = object[key];
 									});

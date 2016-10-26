@@ -1,6 +1,6 @@
 # reasondb
 
-A 100% native JavaScript client and server database with a SQL like syntax, streaming analytics, 17 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, fully indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 45K.
+A 100% native JavaScript client and server database with a SQL like syntax, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, fully indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 45K.
 
 
 # Installation
@@ -30,74 +30,142 @@ Node.js users can use a smaller babelified version with normal `require` syntax.
 require("index.js");
 ```
 
+**Note**: Preliminary tests show ReasonDB running 25% faster using native Promises in Chrome rather than Bluebird, which is frequently used to try and get a performance boost.
+
 ## Example
 
-The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however is also supports nested objects, the return of matching JavaScript instances, and streaming analytics. Below are examples of each primary operation supported:
-
-db.insert({name:"Joe",birthday:new Date("1961-01-15")}).into(Object).as(Object).exec().then(() => {	});
-db.insert({name:"Mary",birthday:new Date("1961-01-15")}).into(Object).as(Object).exec().then(() => { });
-db.insert({name:"Jane",birthday:new Date("1960-02-15")}).into(Object).as(Object).exec().then(() => { });
-db.insert({name:"Bill",birthday:new Date("1960-02-15")}).into(Object).as(Object).exec().then(() => {	});
-db.delete.from(Object).where({name: "Bill"});
+The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however is also supports nested objects, the return of matching JavaScript instances, and streaming analytics. Below are examples of each primary operation supported drawn from code in the `examples/basic` directory:
 
 ```
-// select all Objects where name is not null
-db.select().from({$e1: Object}).where({$e1: {name: {$neq: null}}}).exec().then((cursor) => { });
+var ReasonDB;
+if(typeof(window)==="undefined") {
+	ReasonDB = require("../../lib/index.js"); // Load ReasonDB if running on the server.
+}
+// Create a database at the directory location provided using @key as the primary key on all objects.
+// Store data using localStorage. In the browser this is window.localStorage and the directory location is ignored.
+// On the server JSON files are created. The arguments `true` and `true` force the sharing of indexes across
+// objects and the creation of new storage and indexes each time the example is run.
+let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true,true);
+
+// Define a Person class. Classes are optional. ReasonDB can store items of type Object, Array, and Date by default.
+class Person {
+	constructor(name,birthday) {
+		this.name = name;
+		this.birthday = birthday;
+	}
+}
+// Let the database know that Person instances should be indexed. The index will be shared with Object based on the
+// database creation parameters above.
+db.index(Person);
+// Create a streaming analytics rule that fires every time a Person is added to the database.
+db.when({$p: {name: {$neq: null}}}).from({$p: Person}).select().then((cursor) => { 
+	cursor.forEach((row) => {
+		console.log("New " + row[0].constructor.name + ":",JSON.stringify(row[0]));
+	});
+});
+Promise.all([
+				 // Insert an Object into the Object index casting it to a Person as it is inserted.
+	           db.insert({name:"Mary",birthday:new Date("1961-01-15")}).into(Object).as(Person).exec(),
+	           // Insert a person into the Object index.
+	           db.insert(new Person("Joe",new Date("1961-01-15"))).into(Object).exec(),
+	           // Insert an Object that looks like a Person into the Object index.
+	           db.insert({name:"Joe",birthday:new Date("1960-01-16")}).into(Object).exec(),
+	           // Insert another Object into the Object index casting it to a Person as it is inserted.
+	           db.insert({name:"Bill",birthday:new Date("1960-01-16")}).into(Object).as(Person).exec()
+	           ]).then(() => {
+	           	// Delete a Person from the database where the name is "Joe". This will not match the Object
+	           	// that looks like a person. It will only match one object, the Joe that is a Person.
+	        	   db.delete().from({$p: Person}).where({$p: {name: "Joe"}}).exec().then((result) => {
+	        		   console.log("Deleted:",result);
+	        	   }).then(() => {
+	        	   		// Select and print Person's with non-null names. There will be two.
+	        		   db.select().from({$p: Person}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
+	        			  cursor.forEach((row) => { console.log("Person",JSON.stringify(row[0])); }); 
+	        		   });
+	        		   // Select and print Objects with non-null names. There will be three since Person's are instances of Objects
+	        		   // and are stored in the Object index.
+	        		   db.select().from({$p: Object}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
+	        			  cursor.forEach((row) => { console.log("Object",JSON.stringify(row[0])); }); 
+	        		   });
+	        		   // Print all possible pairs of Person not paired with themselves. There will be two, Mary and Bill plus Bill and Mary.
+	        		   db.select().from({$p1: Person, $p2: Person}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec().then((cursor) => {
+		        			  cursor.forEach((row) => { console.log("Pair:",JSON.stringify(row[0]),JSON.stringify(row[1])); }); 
+		        	   });
+		        	   // Select a Person born on January 15th regardless of year.
+	        		   db.select().from({$p: Person}).where({$p: {name: {$neq: null}, birthday:{date:14,month:0}}}).exec().then((cursor) => {
+	        			  cursor.forEach((row) => { console.log("Born Jan 15th:",JSON.stringify(row[0])); }); 
+	        		   });
+	        		  
+	        	   });
+	           });
 ```
-```
-// select all Objects with a birthday of January 15th
-db.select().from({$e1: Object}).where({$e1: {name: {$neq: null},birthday:{date:14,month:0}}}).exec().then((cursor) => { });
-```
-```
-// select all objects where name is not null and pair them with all other objects that do not have the same key			
-db.select().from({$o1: Object,$o2: Object}).where({$o1: {name: {$neq: null, $o2: "name"}, "@key": {$neq: {$o2: "@key"}}}}).exec().then((cursor) => {	});
-```
 
-				db.select().from({$o: Object}).when({$o: {age: 22}}).then(function(cursor) {
-					expect(cursor.count).to.equal(1);
-					expect(cursor.every((row) => { return row[0].age===22; })).to.equal(true);
-					done();
-				});
-				db.insert({age:22}).into(Object).as(Object).exec().then(() => {
-					db.delete().from({$o1: Object}).where({$o1: {age: 22}}).exec();
-				});
-			});
-		});
-```
+Review other files in the example directory or the unit tests under the test directory for more examples. Examples and unit tests can be run in the browser by loading the index.html file. The same examples and tests can be run in node.js by executing the index.js file.
 
+**Note**: Mocha and Instanbul currently break with ReasonDB under NodeJS even though they work inthe browser. Test code is "decaffinated" prior to executing in NodeJS.
 
+# JOQULAR
 
+## Insert
 
+## Delete
 
-## Debugging and Testing
+## Select
 
-Just above the run command a few lines up, you can see a call to .trace. RuleReactor has 3 trace levels that print to the JavaScript console. A value of 0 turns tracing off.
+## Predicates
 
-1. Prints when:
-	* RuleReactor is starting to run.
-	* A specific rule is firing
-2. Prints when:
-	* A rule is being activated when all it conditions have been met
-	* A rule is being de-activated when its conditions are no longer being met or immediately after executing its action
-3. Prints when:
-	* A new rule is being created
-	* New data is being inserted into RuleReactor
-	* Data is being bound or unbound from rule. This immediately follows insert for all impacted rules.
-	* An object with an impact on a rule is being modified. 
-	* A rule is being tested. This happens when at least one of every object in the domain for the rule is bound. It will repeat if a relevant property is changed on a bound object.
-	* An object is being removed from the RuleReactor.
-	
-But, most importantly you can set regular JavaScript break points in your rule conditions! If you have a complex condition, then break it into several functions while doing development.
+$ - Inline test, e.g. '{age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}'.
 
-Note: Breakpoints will not be activated if the RuleReactor is created with the second argument `boost` set to true, because boosting re-writes rule conditions as more performant functions.
+$typeof - Ensures the value in a property is of the type specified, e.g. '{id: {$typeof: "number"}}'.
 
-To assist in unit testing rules, RuleReactor keeps track of the maximum number of potential matches found for a rule as well as how many times it was tested, activated, or fired. These statistics are printed to the console in the order just listed when the .run command completes if the trace level is set to 3. They are also available as data properties of a rule instance.
+$lt - Less than test, e.g. '{age: {$lt: 21}}'. Aliased to `<`, e.g. '{age: {"<": 21}}'.
 
+$lte - Less than or equal test, e.g. '{age: {$lte: 21}}'. Aliased to `<=`, e.g. '{age: {"<=": 21}}'.
 
-# Performance & Size
+$eq - Relaxed equal test, e.g. '{age: {$eq: 21}}' and `{age: {$eq: "21"}}` will match the same objects. Aliased to `==`.
 
-Preliminary tests show performance close to that of Nools. However, the rule-reactor core is just 41K (19K minified) vs 577K (227K minified) for Nools. At runtime, rule-reactor will also consume many megabytes less memory than nools for its pattern and join processing.
+$neq - Relaxed not equal test, e.g. '{age: {$neq: 21}}' or `{age: {$neq: "21"}}` will match the same objects. Aliased to `!=`.
 
+$neeq - Not exact equal test, e.g. '{age: {$neq: 21}}' or `{age: {$neq: "21"}}` will not match the same objects since type is taken into consideration. Aliased to `!==`.
+
+$eeq - Exact equal test, e.g. '{age: {$eq: 21}}' and `{age: {$eq: "21"}}` will not match the same objects since type is taken into consideration. . Aliased to `===`.
+Index["==="] = $eeq;
+
+$gte - Greater than or equal test, e.g. '{age: {$gte: 21}}'. Aliased to `>=`, e.g. '{age: {">=": 21}}'.
+
+$gt - Greater than test, e.g. '{age: {$gt: 21}}'. Aliased to `>`, e.g. '{age: {">": 21}}'.
+
+$echoes - Implements soundex comparison, e.g. `{name:{$echoes:"Jo"}}` would match an object with `{name: "Joe"}`.
+
+$matches - Implements RegExp mathing, e.g. `{name:{$matches: <RegExp>}}`. RegExp can either be a regular expression using shorthand notation, or a string that looks like a regular expression, i.e starts and ends with `/`.
+
+$in - Tests to see if a value is in the specified sequence, e.g. `{age:{$in:[24,25]}}` only matches 24 and 25. Types must match.
+
+$nin - Tests to see if a value is not in the specified sequence, e.g. `{age:{$nin:[24,25]}}` matches everything except 24 and 25. Types must match.
+
+$between - Tests to see if a value is between the first and second elements, e.g. `{age:{$between:[24,25,true]}}`. The flag `true` includes the boundaries in the test. Types must match.
+
+$outside - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match.
+
+## Array Matching
+
+Arrays are treated like objects for matching, e.g. `{children: {1:"Joe"}}`, matches an object `{children:["Mary","Joe"]}`.
+
+The max, average and min values of all arrays are indexed and can be tested using special predicates:
+
+$max - `{sizes: {$max: 5}}` matches `{sizes: [3,5,4,2]}`.
+$avg - `{sizes: {$avg: 3.5}}` matches `{sizes: [3,5,4,2]}`.
+$min - `{sizes: {$min: 2}}` matches `{sizes: [3,5,4,2]}`.
+
+## Date Matching
+
+All the properties equivalent to the get methods on Date objects are indexed, e.g. getMonth can be matched as `{month: <some month>}` and getUTCMonth as `{UTCMonth: <some month>}`.
+
+#Extending ReasonDB
+
+## Adding Predicates
+
+## Adding Persistence Engines
 
 # Building & Testing
 
@@ -110,123 +178,9 @@ For code quality assessment purposes, the cyclomatic complexity threshold is set
 
 # Updates (reverse chronological order)
 
-2016-10-08 v0.1.3 Testing fix for issue #15. Not pushed to npm. See test/issue15.html.
+2016-10-25 v0.0.3 First npm publication.
 
-2016-10-08 v0.1.2 Fixed issue #10 and #11 courtesy of @tve. Added test case test/issue11.html. Added example async-assertions.html to provide some guidance on how to integrated with an http server. An example using an actually http server will be forthcoming.
-
-2016-09-14 v0.1.1 Enhanced family example to address question posed in [Issue 2](https://github.com/anywhichway/rule-reactor/issues/2) regarding embedded object matching.
-
-2016-09-06 v0.1.0 Production release. License changed from AGPL to MIT.
-
-2016-06-16 v0.0.29 Fixed [Issue 1](https://github.com/anywhichway/rule-reactor/issues/1). Added unit test. Thanks to [slmmm](https://github.com/slmmm) for identifying.
-
-2016-04-27 v0.0.28 Not published to npm.
-
-* Codacy and CodeClimate driven style quality improvements.
-
-2016-04-27 v0.0.27
-
-* Optimized activation insertion into agenda. Applications with a large number of rules on the agenda with different saliences or that thrash the agenda should run slightly faster.
-
-2016-04-21 v0.0.24 Not published to npm.
-
-* Codacy and CodeClimate driven style quality improvements. 
-
-2016-04-25 v0.0.23
-
-* Added support for indexing primitive objects, e.g. Number, String, Boolean. As a result, this type of pattern will work: exists({to: Number},{to: 1})
-* Added support for universal quantification patterns, e.g. forAll({to: Number},{to: 1}). Formerly, only existential were supported.
-* Addressed an issue where existential quantification pattern matching sometimes did not return the same result as function based existential quantification. 
-The function based quantification was always correct.
-* Added unit tests.
-
-2016-04-24 v0.0.22 Not published to npm.
-
-* Added unit tests.
-* Renamed function forall for constructor instance checking to forAll. This does not impact the forAll that is used in rules.
-* Modified bind to return true/false if it is used to test rules by passing the optional test argument.
-* Started building through travis-ci online.
-
-2016-04-21 v0.0.21 
-
-* Added Codacy and NPM badges.
-
-2016-04-21 v0.0.20 Not published to npm.
-
-* Codacy and CodeClimate driven style quality improvements. 
-
-2016-04-21 v0.0.19  Not published to npm.
-
-* Codacy and CodeClimate driven style quality improvements.
-
-2016-04-21 v0.0.18 Not published to npm.
-
-* Codacy and CodeClimate driven style quality improvements. 
-
-2016-04-21 v0.0.17 Not published to npm.
-
-* Corrected some documentation errors
-* Codacy and CodeClimate driven style quality improvements. 
-
-2016-04-20 v0.0.16 
-
-* Performance optimizations
-* Removal of unused code
-
-2016-04-11	 v0.0.15
-
-* Fixed issue where binding test was looking for instance id rather than instance. Could have resulted in duplicate instances in bindings.
-* Documented existential pattern matching.
-* Added Miss Manners example.
-* exists-and-every.html example renamed to exists-and-forAll.html.
-* Improved performance by approximately 25% by adding a rule condition compilation functionality. This can be turned on using an optional boolean argument when instantiating a RuleReactor.
-* when run is called with Infinity, stop() must now be explicitly called to stop running.
-
-2016-04-06	 v0.0.14 
-
-* Changed .insert and .remove to .assert and .retract to be consistent with many other rule engines.
-* RuleReactor is no longer a singleton, an instance must be created with new RuleReactor(). This effectively provides support for multiple rule sets. 
-* Not only have unit tests been added, the RuleReactor itself has had testing capability
-added. See documentation section on Debugging and Testing. 
-* Modified the internal storage of data from an Array to a Map.
-* Added dependency on uuid package for generating internal object ids.
-* Added support for JavaScript primitive objects as part of rule domains, e.g. {num: Number}. 
-* Added rule validity checking, e.g. ensuring domains variables referenced by conditions are declared for the rule.
-* Added existential and universal quantification.
-* Corrected issue where rule activations were not being tracked properly when not created as a result of a specific instance.
-* Corrected issue where properties only referenced in rule actions were not being made reactive. This prevented proper existential and universal quantification behavior.
-* Enhanced documentation
-
-2016-03-31 v0.0.13 No functional changes.
-
-2016-03-31 v0.0.12 No functional changes.
-
-2016-03-31 v0.0.11 Added documentation. Corrected nools performance statements (it is faster than was stated).
-
-2016-03-31 v0.0.10 Salience ordering is now working. Re-worked the cross-product and matching for a 10x performance increase in Firefox and Chrome. Send More Money can now be solved in 2 minutes similar to nools. License changed to GPL 3.0.
-
-2016-03-22 v0.0.9 Improved rule matching further by packing all arrays with -1 in place of undefined. Ensures JavaScript engine does not convert a sparse array into a map internally. Corrected documentation regarding permutations explored for Send More Money.
-
-2016-03-21 v0.0.8 Added Send More Money example for stress testing joins. Further optimized cross-product to reduce heap use. Optimized call of cross-product
-in rule processing to reduce possible size of cross-product based on the rule being tested. The net performance improvements have been 5x to 10x, depending on the
-nature of the rules and the amount of data being processed.
-
-2016-03-20 v0.0.7 Unpublished code style changes. No functional changes.
-
-2016-03-20 v0.0.6 Rule condition processing optimizations for both speed and memory. Added ability to provide a list of functions as a rule condition to reduce cross-product join load. Enhanced rule condition and action parsing so that only the variable for the relevant object domain needs to be provided. This provides a "hint" to RuleReactor to reduce the number
-of objects included in a cross-product. Provided a run option to loosen up the run loop and added the ability to have a callback when complete. In v0.0.0.7 or 8 a Promise implementation will be provided. Loosening up the run loop slows performance, so it is optional. Added a .setOptions function to Rules to choose the cross-product approach for optimizing stack or heap size.
-Typically optimizing the stack increases performance (although it may vary across browsers), so it is the default. Heap optimization is required for rules that have very large join possibility. Fixed an issue where sometimes the last rule on the agenda would not fire.
-
-2016-03-17 v0.0.5 Further optimization of cross-product.
-
-2016-03-16 v0.0.4 Further optimization.
-
-2016-03-16 v0.0.3 Unpublished. Reworked cross-product so that it is non-recursive so that more joins can be supported.
-
-2016-03-13 v0.0.2 Performance improvements
-
-2016-03-10 v0.0.1 Original public commit
 
 # License
 
-This software is provided as-is under the [AGPL 3.0 license](https://opensource.org/licenses/AGPL-3.0).
+This software is provided as-is under the [MIT license](https://opensource.org/licenses/MIT).
