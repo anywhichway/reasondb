@@ -1,15 +1,15 @@
 # reasondb
 
-A 100% native JavaScript client and server database with a SQL like syntax, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, fully indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 45K.
+A 100% native JavaScript client and server database with a SQL like syntax, columnar projections, object instance result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, fully indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 45K.
 
 
-# Installation
+## Installation
 
 npm install reasondb
 
-# Basic Use
+## Basic Use
 
-## Loading
+### Loading
 
 Users of Chrome 54.0 and greater can use the file at src\index.js so long as node-uuid is loaded first (45K): 
 
@@ -32,7 +32,7 @@ require("index.js");
 
 **Note**: Preliminary tests show ReasonDB running 25% faster using native Promises in Chrome rather than Bluebird, which is frequently used to try and get a performance boost.
 
-## Example
+### Example
 
 The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however is also supports nested objects, the return of matching JavaScript instances, and streaming analytics. Below are examples of each primary operation supported drawn from code in the `examples/basic` directory:
 
@@ -104,36 +104,44 @@ Review other files in the example directory or the unit tests under the test dir
 
 **Note**: Mocha and Instanbul currently break with ReasonDB under NodeJS even though they work inthe browser. Test code is "decaffinated" prior to executing in NodeJS.
 
-# JOQULAR
+## JOQULAR
 
-## Insert
+### Insert
 
-## Delete
+Inserting an object into the database activates it such that any subsequent changes to the object automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store.
 
-## Select
+### Delete
 
-## Predicates
+Deleting an object from the database removes its unique key and removes it from the index and the persistent store.
 
-$ - Inline test, e.g. '{age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}'.
+### Select
 
-$typeof - Ensures the value in a property is of the type specified, e.g. '{id: {$typeof: "number"}}'.
+### Update
 
-$lt - Less than test, e.g. '{age: {$lt: 21}}'. Aliased to `<`, e.g. '{age: {"<": 21}}'.
+There is currently no update statement since updates to an object automatically update the database.
 
-$lte - Less than or equal test, e.g. '{age: {$lte: 21}}'. Aliased to `<=`, e.g. '{age: {"<=": 21}}'.
+### Predicates
 
-$eq - Relaxed equal test, e.g. '{age: {$eq: 21}}' and `{age: {$eq: "21"}}` will match the same objects. Aliased to `==`.
+$ - Inline test, e.g. `{age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}`.
 
-$neq - Relaxed not equal test, e.g. '{age: {$neq: 21}}' or `{age: {$neq: "21"}}` will match the same objects. Aliased to `!=`.
+$typeof - Ensures the value in a property is of the type specified, e.g. `{id: {$typeof: "number"}}`.
 
-$neeq - Not exact equal test, e.g. '{age: {$neq: 21}}' or `{age: {$neq: "21"}}` will not match the same objects since type is taken into consideration. Aliased to `!==`.
+$lt - Less than test, e.g. `{age: {$lt: 21}}`. Aliased to `<`, e.g. `{age: {"<": 21}}`.
 
-$eeq - Exact equal test, e.g. '{age: {$eq: 21}}' and `{age: {$eq: "21"}}` will not match the same objects since type is taken into consideration. . Aliased to `===`.
+$lte - Less than or equal test, e.g. `{age: {$lte: 21}}`. Aliased to `<=`, e.g. `{age: {"<=": 21}}`.
+
+$eq - Relaxed equal test, e.g. `{age: {$eq: 21}}` and `{age: {$eq: "21"}}` will match the same objects. Aliased to `==`.
+
+$neq - Relaxed not equal test, e.g. `{age: {$neq: 21}}` or `{age: {$neq: "21"}}` will match the same objects. Aliased to `!=`.
+
+$neeq - Not exact equal test, e.g. `{age: {$neq: 21}}` or `{age: {$neq: "21"}}` will not match the same objects since type is taken into consideration. Aliased to `!==`.
+
+$eeq - Exact equal test, e.g. `{age: {$eq: 21}}` and `{age: {$eq: "21"}}` will not match the same objects since type is taken into consideration. . Aliased to `===`.
 Index["==="] = $eeq;
 
-$gte - Greater than or equal test, e.g. '{age: {$gte: 21}}'. Aliased to `>=`, e.g. '{age: {">=": 21}}'.
+$gte - Greater than or equal test, e.g. `{age: {$gte: 21}}`. Aliased to `>=`, e.g. `{age: {">=": 21}}`.
 
-$gt - Greater than test, e.g. '{age: {$gt: 21}}'. Aliased to `>`, e.g. '{age: {">": 21}}'.
+$gt - Greater than test, e.g. `{age: {$gt: 21}}`. Aliased to `>`, e.g. `{age: {">": 21}}`.
 
 $echoes - Implements soundex comparison, e.g. `{name:{$echoes:"Jo"}}` would match an object with `{name: "Joe"}`.
 
@@ -147,7 +155,7 @@ $between - Tests to see if a value is between the first and second elements, e.g
 
 $outside - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match.
 
-## Array Matching
+### Array Matching
 
 Arrays are treated like objects for matching, e.g. `{children: {1:"Joe"}}`, matches an object `{children:["Mary","Joe"]}`.
 
@@ -157,30 +165,30 @@ $max - `{sizes: {$max: 5}}` matches `{sizes: [3,5,4,2]}`.
 $avg - `{sizes: {$avg: 3.5}}` matches `{sizes: [3,5,4,2]}`.
 $min - `{sizes: {$min: 2}}` matches `{sizes: [3,5,4,2]}`.
 
-## Date Matching
+### Date Matching
 
 All the properties equivalent to the get methods on Date objects are indexed, e.g. getMonth can be matched as `{month: <some month>}` and getUTCMonth as `{UTCMonth: <some month>}`.
 
-#Extending ReasonDB
+##Extending ReasonDB
 
-## Adding Predicates
+### Adding Predicates
 
-## Adding Persistence Engines
+### Adding Persistence Engines
 
-# Building & Testing
+## Building & Testing
 
 Building, testing and quality assessment are conducted using Travis, Mocha, Chai, Istanbul, Code Climate, and Codacity.
 
 For code quality assessment purposes, the cyclomatic complexity threshold is set to 10.
 
-# Notes
+## Notes
 
 
-# Updates (reverse chronological order)
+## Updates (reverse chronological order)
 
 2016-10-25 v0.0.3 First npm publication.
 
 
-# License
+## License
 
 This software is provided as-is under the [MIT license](https://opensource.org/licenses/MIT).
