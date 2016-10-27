@@ -279,6 +279,7 @@ SOFTWARE.
 						let pattern = db.patterns[cls.name][key][patternId][classVar],
 							projection,
 							when = {};
+						if(!pattern.action) { return; }
 						if(pattern.projection) {
 							projection = {};
 							Object.keys(pattern.projection).forEach((key) => {
@@ -299,9 +300,9 @@ SOFTWARE.
 							}
 						});
 						db.select(projection).from(pattern.classVars).where(when).exec().then((cursor) => { 
-							if(!fired[patternId] && cursor.count>0) { 
+							if(!fired[patternId] && cursor.count()>0) { 
 								fired[patternId]=true;
-								pattern.resolver(cursor); 
+								pattern.action(cursor); 
 							} 
 						});
 					});
@@ -1483,8 +1484,8 @@ SOFTWARE.
 				from(classVars) {
 					return {
 						select(projection) {
-							let pattern = new db.Pattern(projection,classVars,whenPattern),
-								promise = new Promise((resolve,reject) => { pattern.resolver = resolve; pattern.rejector = reject; });
+							let pattern = new db.Pattern(projection,classVars,whenPattern);
+							//	promise = new Promise((resolve,reject) => { pattern.resolver = resolve; pattern.rejector = reject; });
 							Object.keys(whenPattern).forEach((classVar) => {
 								if(classVar[0]!=="$") { return; }
 								let cls = classVars[classVar];
@@ -1495,7 +1496,11 @@ SOFTWARE.
 									if(!db.patterns[cls.name][property][pattern[db.keyProperty]][classVar]) { db.patterns[cls.name][property][pattern[db.keyProperty]][classVar] = pattern; }
 								});
 							});
-							return promise;
+							return {
+								then(f) {
+									pattern.action = f;
+								}
+							}
 						}
 					}
 				}

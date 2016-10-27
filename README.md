@@ -1,6 +1,6 @@
 # reasondb
 
-A 100% native JavaScript client and server database with a SQL like syntax, columnar projections, object instance result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, fully indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 45K.
+A 100% native JavaScript client and server database with a SQL like syntax, columnar projections, object instance result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, fully indexed Dates and Arrays, joins, nested matching, swapable persistence engines, and automatic synchronization of object changes into the database and indexes in as little as 45K.
 
 
 ## Installation
@@ -18,13 +18,13 @@ Users of Chrome 54.0 and greater can use the file at src\index.js so long as nod
 <script src="../browser/reasondb.js"></script>
 ```
 
-A browserified version is located at browser\reasondb.js (755K). It will operate in Chrome and Firefox. Microsoft Edge throws undown errors.
+A browserified version is located at browser/reasondb.js (755K). It will operate in Chrome and Firefox. Microsoft Edge throws undown errors.
 
 ```
 <script src="../browser/reasondb.js"></script>
 ```
 
-Node.js users can use a smaller babelified version with normal `require` syntax. The code actually loaded is in `lib\index.js` (81K): 
+Node.js users can use a smaller babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (81K): 
 
 ```
 require("index.js");
@@ -154,17 +154,31 @@ See Patterns above for a general description of the `where` clause.
 
 In order to optimize memory and speed, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the acutal number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. Requiring a function call to get `count` is intended to have the programmer be thoughtful about its use. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop if far more efficient than first calling `count`.
 
+### When - Streaming Analytics
+
+`db.when(<pattern>).from({<classVariable>: <class>[,...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
+
+Whenever `<pattern>` is matched based on new data being inserted or existing data being changed the function specified in `then` will be invoked.
+
 #### Projections
+
+By default `select` clauses return a Promise which yields a cursor with rows represented by arrays of objects. By providing a projection, the row will be replaced with a single object that is a merger of data across the objects in the row.
+
+A `<projection>` takes the form `{<propertyName: {<classVariable: "<objectProperty>"}[,...]}`.
+
+For example `{e1name: {$e1: "name"},e2name: {$e2: "name"}}` will result in rows of the form `{e1name: "Joe",e2name: "Mary"}` assuming there are objects with the name "Joe" and "Mary" in database.
 
 
 #### Joins
 
+Select statements can join data from across classes in the `where` and `when` clauses.
 
 ### Update
 
 There is currently no update statement since updates to an object automatically update the database.
 
-### When - Streaming Analytics
+
+### Direct Index Matching
 
 
 
@@ -238,6 +252,8 @@ For code quality assessment purposes, the cyclomatic complexity threshold is set
 
 
 ## Updates (reverse chronological order)
+
+2016-10-27 v0.0.5 Added documentation. Repaired 'when' which broke when cursor.count was changed to a function. Published to npm.
 
 2016-10-26 v0.0.4 Added documentation. Changed `count` on Cursor instances to a function and added `maxCount` as a data member. Not published to npm.
 

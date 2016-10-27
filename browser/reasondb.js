@@ -278,7 +278,6 @@ SOFTWARE.
 			this.cxproduct = cxproduct;
 			this.projection = projection;
 			this.classVarMap = classVarMap;
-			this.position = 0;
 		}
 
 		(0, _createClass3.default)(Cursor, [{
@@ -353,6 +352,16 @@ SOFTWARE.
 				return result;
 			}
 		}, {
+			key: "count",
+			value: function count() {
+				var cursor = this,
+				    i = 0;
+				cursor.forEach(function (row) {
+					i++;
+				});
+				return i;
+			}
+		}, {
 			key: "get",
 			value: function get(rowNumber) {
 				// should this be async due to put below?
@@ -398,14 +407,9 @@ SOFTWARE.
 				}
 			}
 		}, {
-			key: "count",
+			key: "maxCount",
 			get: function get() {
-				var cursor = this,
-				    i = 0;
-				cursor.forEach(function (row) {
-					i++;
-				});
-				return i;
+				return this.cxproduct.length;
 			}
 		}]);
 		return Cursor;
@@ -424,6 +428,9 @@ SOFTWARE.
 						var pattern = db.patterns[cls.name][key][patternId][classVar],
 						    projection = void 0,
 						    when = {};
+						if (!pattern.action) {
+							return;
+						}
 						if (pattern.projection) {
 							projection = {};
 							(0, _keys2.default)(pattern.projection).forEach(function (key) {
@@ -444,9 +451,9 @@ SOFTWARE.
 							}
 						});
 						db.select(projection).from(pattern.classVars).where(when).exec().then(function (cursor) {
-							if (!fired[patternId] && cursor.count > 0) {
+							if (!fired[patternId] && cursor.count() > 0) {
 								fired[patternId] = true;
-								pattern.resolver(cursor);
+								pattern.action(cursor);
 							}
 						});
 					});
@@ -2709,10 +2716,8 @@ SOFTWARE.
 					from: function from(classVars) {
 						return {
 							select: function select(projection) {
-								var pattern = new db.Pattern(projection, classVars, whenPattern),
-								    promise = new _promise3.default(function (resolve, reject) {
-									pattern.resolver = resolve;pattern.rejector = reject;
-								});
+								var pattern = new db.Pattern(projection, classVars, whenPattern);
+								//	promise = new Promise((resolve,reject) => { pattern.resolver = resolve; pattern.rejector = reject; });
 								(0, _keys2.default)(whenPattern).forEach(function (classVar) {
 									if (classVar[0] !== "$") {
 										return;
@@ -2733,7 +2738,11 @@ SOFTWARE.
 										}
 									});
 								});
-								return promise;
+								return {
+									then: function then(f) {
+										pattern.action = f;
+									}
+								};
 							}
 						};
 					}
