@@ -19,9 +19,15 @@ class Person {
 // database creation parameters above.
 db.index(Person);
 // Create a streaming analytics rule that fires every time a Person is added to the database.
-db.when({$p: {name: {$neq: null}}}).from({$p: Person}).select().then((cursor) => { 
+db.when({$p: {name: {$neq: null}, partner: undefined}}).from({$p: Person}).select().then((cursor) => { 
 	cursor.forEach((row) => {
 		console.log("New " + row[0].constructor.name + ":",JSON.stringify(row[0]));
+	});
+});
+//Create a streaming analytics rule that fires every time a Person is updated with a partner.
+db.when({$p: {partner: {$neq: null}}}).from({$p: Person}).select().then((cursor) => { 
+	cursor.forEach((row) => {
+		console.log("Updated " + row[0].constructor.name + ":",JSON.stringify(row[0]));
 	});
 });
 Promise.all([
@@ -56,7 +62,10 @@ Promise.all([
 	        		   db.select().from({$p: Person}).where({$p: {name: {$neq: null}, birthday:{date:14,month:0}}}).exec().then((cursor) => {
 	        			  cursor.forEach((row) => { console.log("Born Jan 15th:",JSON.stringify(row[0])); }); 
 	        		   });
-	        		  
+	        		   // Update the partner for all Persons, the last update will "win"
+	        		   db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec().then((count) => {
+	        			  console.log(count + " updates"); 
+	        		   });
 	        	   });
 	           });
 	

@@ -29,10 +29,6 @@ var _regenerator = require("babel-runtime/regenerator");
 
 var _regenerator2 = _interopRequireDefault(_regenerator);
 
-var _promise2 = require("babel-runtime/core-js/promise");
-
-var _promise3 = _interopRequireDefault(_promise2);
-
 var _asyncToGenerator2 = require("babel-runtime/helpers/asyncToGenerator");
 
 var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);
@@ -40,6 +36,10 @@ var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);
 var _typeof2 = require("babel-runtime/helpers/typeof");
 
 var _typeof3 = _interopRequireDefault(_typeof2);
+
+var _promise2 = require("babel-runtime/core-js/promise");
+
+var _promise3 = _interopRequireDefault(_promise2);
 
 var _classCallCheck2 = require("babel-runtime/helpers/classCallCheck");
 
@@ -284,11 +284,16 @@ SOFTWARE.
 			key: "forEach",
 			value: function forEach(f) {
 				var cursor = this,
+				    promises = [],
 				    i = 0;
 				function rows() {
 					var row = cursor.get(i);
 					if (row) {
-						f(row, i, cursor);
+						var result = f(row, i, cursor);
+						if (!(result instanceof _promise3.default)) {
+							result = _promise3.default.resolve(result);
+						}
+						promises.push(result);
 					}
 					i++;
 					if (i < cursor.cxproduct.length) {
@@ -296,7 +301,7 @@ SOFTWARE.
 					}
 				}
 				rows();
-				return i;
+				return _promise3.default.all(promises);
 			}
 		}, {
 			key: "every",
@@ -393,7 +398,8 @@ SOFTWARE.
 							if (row) {
 								row.forEach(function (item) {
 									if (item.constructor.index) {
-										item.constructor.index.activate(item, false); // activate objects right before returning
+										var db = item.constructor.index.__metadata__.store.db();
+										item.constructor.index.index(item, false, db.activate); // activate objects right before returning
 									}
 								});
 							}
@@ -833,6 +839,9 @@ SOFTWARE.
 											    value = pattern[key],
 											    type = typeof value === "undefined" ? "undefined" : (0, _typeof3.default)(value);
 											if (!node) {
+												if (type === "undefined") {
+													return true;
+												}
 												results[classVar] = [];
 												return false;
 											}
@@ -872,6 +881,7 @@ SOFTWARE.
 										if (results[classVar] && results[classVar].length === 0) {
 											resolve([]);return;
 										}
+										var exclude = [];
 										nodes.every(function (node, i) {
 											if (!literals[i]) {
 												return true;
@@ -879,6 +889,14 @@ SOFTWARE.
 											var key = keys[i],
 											    value = pattern[key],
 											    type = typeof value === "undefined" ? "undefined" : (0, _typeof3.default)(value);
+											if (type === "undefined") {
+												(0, _keys2.default)(node).forEach(function (testValue) {
+													(0, _keys2.default)(node[testValue]).forEach(function (testType) {
+														exclude = exclude.concat((0, _keys2.default)(node[testValue][testType]));
+													});
+												});
+												return true;
+											}
 											if (!node[value] || !node[value][type]) {
 												results[classVar] = [];
 												return false;
@@ -896,10 +914,19 @@ SOFTWARE.
 											}
 											var key = keys[i],
 											    predicate = pattern[key],
-											    testnaindex = (0, _keys2.default)(predicate)[0],
-											    value = predicate[testnaindex],
-											    test = Index[testnaindex],
+											    testname = (0, _keys2.default)(predicate)[0],
+											    value = predicate[testname],
+											    type = typeof value === "undefined" ? "undefined" : (0, _typeof3.default)(value),
+											    test = Index[testname],
 											    ids = [];
+											if (type === "undefined" && (testname === "$eq" || testname === "$eeq")) {
+												(0, _keys2.default)(node).forEach(function (testValue) {
+													(0, _keys2.default)(node[testValue]).forEach(function (testType) {
+														exclude = exclude.concat((0, _keys2.default)(node[testValue][testType]));
+													});
+												});
+												return true;
+											}
 											(0, _keys2.default)(node).forEach(function (testValue) {
 												(0, _keys2.default)(node[testValue]).forEach(function (testType) {
 													if (test(Index.coerce(testValue, testType), value)) {
@@ -1006,7 +1033,9 @@ SOFTWARE.
 													return results[classVar] && results[classVar].length > 0;
 												});
 												if (results[classVar] && results[classVar].length > 0) {
-													resolve(results[classVar]);return;
+													resolve(results[classVar].filter(function (item) {
+														return exclude.indexOf(item) === -1;
+													}));return;
 												}
 												resolve([]);
 											});
@@ -1031,12 +1060,12 @@ SOFTWARE.
 			key: "put",
 			value: function () {
 				var _ref6 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee6(object) {
-					var index, keyProperty, id;
+					var index, store, db, keyProperty, id;
 					return _regenerator2.default.wrap(function _callee6$(_context6) {
 						while (1) {
 							switch (_context6.prev = _context6.next) {
 								case 0:
-									index = this, keyProperty = index.__metadata__.store.keyProperty(), id = object[keyProperty];
+									index = this, store = index.__metadata__.store, db = store.db(), keyProperty = store.keyProperty(), id = object[keyProperty];
 
 									if (!id) {
 										id = object[keyProperty] = object.constructor.name + "@" + (_uuid ? _uuid.v4() : uuid.v4());
@@ -1048,10 +1077,10 @@ SOFTWARE.
 									}
 
 									index[id] = object;
-									index.__metadata__.store.addScope(object);
+									store.addScope(object);
 									_context6.prev = 5;
 									_context6.next = 8;
-									return index.__metadata__.store.set(id, object, true);
+									return store.set(id, object, db.activate);
 
 								case 8:
 									_context6.next = 13;
@@ -1064,7 +1093,7 @@ SOFTWARE.
 									console.log(_context6.t0);
 
 								case 13:
-									return _context6.abrupt("return", index.activate(object, true));
+									return _context6.abrupt("return", index.index(object, true, db.activate));
 
 								case 14:
 								case "end":
@@ -1081,9 +1110,9 @@ SOFTWARE.
 				return put;
 			}()
 		}, {
-			key: "activate",
+			key: "index",
 			value: function () {
-				var _ref7 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee7(object, reIndex) {
+				var _ref7 = (0, _asyncToGenerator3.default)(_regenerator2.default.mark(function _callee7(object, reIndex, activate) {
 					var index, store, keyProperty, db, id, cls, promises;
 					return _regenerator2.default.wrap(function _callee7$(_context7) {
 						while (1) {
@@ -1098,7 +1127,7 @@ SOFTWARE.
 												object[fname] = function () {
 													var me = this;
 													f.call.apply(f, [me].concat(Array.prototype.slice.call(arguments)));
-													index.activate(me, true).then(function () {
+													index.index(me, true, db.activate).then(function () {
 														stream(me, db);
 													});
 												};
@@ -1121,7 +1150,6 @@ SOFTWARE.
 											    oldvalue = get.value,
 											    oldtype = typeof oldvalue === "undefined" ? "undefined" : (0, _typeof3.default)(oldvalue),
 											    type = typeof value === "undefined" ? "undefined" : (0, _typeof3.default)(value);
-											//unindex = (key===keyProperty && type==="undefined");
 											if (oldtype === "undefined" || oldvalue != value) {
 												if (type === "undefined") {
 													delete get.value;
@@ -1130,7 +1158,7 @@ SOFTWARE.
 												}
 												return new _promise3.default(function (resolve, reject) {
 													index.get(key, true).then(function (node) {
-														node = index[key]; // re-assign since 1) we know it is loaded and initialized, it may have been overwritten by another async
+														node = index[key]; // re-assign since 1) we know it is loaded and initialized, 2) it may have been overwritten by another async
 														if (!instance[keyProperty]) {
 															// object may have been deleted by another async call!
 															if (node[oldvalue] && node[oldvalue][oldtype]) {
@@ -1198,7 +1226,7 @@ SOFTWARE.
 											return _promise3.default.resolve(true);
 										}
 										var writable = desc && !!desc.configurable && !!desc.writable;
-										if (desc && writable && !desc.get && !desc.set) {
+										if (activate && desc && writable && !desc.get && !desc.set) {
 											delete desc.writable;
 											delete desc.value;
 											desc.get = get;
@@ -1206,6 +1234,7 @@ SOFTWARE.
 											(0, _defineProperty2.default)(object, key, desc);
 										}
 										if (reIndex) {
+											index.__metadata__.store.set(object[keyProperty], object, true);
 											promises.push(set.call(object, value, true));
 										}
 									});
@@ -1221,11 +1250,11 @@ SOFTWARE.
 					}, _callee7, this);
 				}));
 
-				function activate(_x19, _x20) {
+				function index(_x19, _x20, _x21) {
 					return _ref7.apply(this, arguments);
 				}
 
-				return activate;
+				return index;
 			}()
 		}, {
 			key: "save",
@@ -1264,7 +1293,7 @@ SOFTWARE.
 					}, _callee8, this, [[2, 8]]);
 				}));
 
-				function save(_x21) {
+				function save(_x22) {
 					return _ref8.apply(this, arguments);
 				}
 
@@ -1723,7 +1752,7 @@ SOFTWARE.
 					}, _callee11, this);
 				}));
 
-				function restore(_x24, _x25, _x26) {
+				function restore(_x25, _x26, _x27) {
 					return _ref9.apply(this, arguments);
 				}
 
@@ -1798,7 +1827,7 @@ SOFTWARE.
 					}, _callee13, this);
 				}));
 
-				function _delete(_x28) {
+				function _delete(_x29) {
 					return _ref11.apply(this, arguments);
 				}
 
@@ -1822,7 +1851,7 @@ SOFTWARE.
 					}, _callee14, this);
 				}));
 
-				function get(_x29) {
+				function get(_x30) {
 					return _ref12.apply(this, arguments);
 				}
 
@@ -1881,7 +1910,7 @@ SOFTWARE.
 					}, _callee16, this);
 				}));
 
-				function set(_x30, _x31) {
+				function set(_x31, _x32) {
 					return _ref14.apply(this, arguments);
 				}
 
@@ -1971,7 +2000,7 @@ SOFTWARE.
 					}, _callee18, this);
 				}));
 
-				function _delete(_x32, _x33) {
+				function _delete(_x33, _x34) {
 					return _ref16.apply(this, arguments);
 				}
 
@@ -2015,7 +2044,7 @@ SOFTWARE.
 					}, _callee19, this, [[3, 9]]);
 				}));
 
-				function get(_x34) {
+				function get(_x35) {
 					return _ref17.apply(this, arguments);
 				}
 
@@ -2081,7 +2110,7 @@ SOFTWARE.
 					}, _callee20, this, [[5, 11]]);
 				}));
 
-				function load(_x35) {
+				function load(_x36) {
 					return _ref18.apply(this, arguments);
 				}
 
@@ -2107,7 +2136,7 @@ SOFTWARE.
 					}, _callee21, this);
 				}));
 
-				function set(_x36, _x37, _x38) {
+				function set(_x37, _x38, _x39) {
 					return _ref19.apply(this, arguments);
 				}
 
@@ -2226,7 +2255,7 @@ SOFTWARE.
 					}, _callee23, this, [[2, 7]]);
 				}));
 
-				function _delete(_x39, _x40) {
+				function _delete(_x40, _x41) {
 					return _ref21.apply(this, arguments);
 				}
 
@@ -2285,7 +2314,7 @@ SOFTWARE.
 					}, _callee24, this, [[1, 7], [12, 18]]);
 				}));
 
-				function get(_x41) {
+				function get(_x42) {
 					return _ref22.apply(this, arguments);
 				}
 
@@ -2351,7 +2380,7 @@ SOFTWARE.
 					}, _callee25, this, [[5, 11]]);
 				}));
 
-				function load(_x42) {
+				function load(_x43) {
 					return _ref23.apply(this, arguments);
 				}
 
@@ -2391,7 +2420,7 @@ SOFTWARE.
 					}, _callee26, this, [[1, 6]]);
 				}));
 
-				function set(_x43, _x44, _x45) {
+				function set(_x44, _x45, _x46) {
 					return _ref24.apply(this, arguments);
 				}
 
@@ -2405,10 +2434,11 @@ SOFTWARE.
 		function ReasonDB(name) {
 			var keyProperty = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "@key";
 			var storageType = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : MemStore;
-			var shared = arguments[3];
-			var clear = arguments[4];
+			var shared = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : true;
+			var clear = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : false;
+			var activate = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : true;
 			(0, _classCallCheck3.default)(this, ReasonDB);
-
+			// make the additional args part of a config object, add a config option for active or passive objects
 			var db = this;
 			db.name = name;
 			db.keyProperty = keyProperty;
@@ -2416,6 +2446,7 @@ SOFTWARE.
 			db.clear = clear;
 			db.shared = shared;
 			db.classes = {};
+			db.activate = activate;
 
 			delete Object.index;
 			db.index(Object, keyProperty, storageType, clear);
@@ -2520,7 +2551,7 @@ SOFTWARE.
 					}, _callee27, this, [[1, 6]]);
 				}));
 
-				function deleteIndex(_x48) {
+				function deleteIndex(_x52) {
 					return _ref25.apply(this, arguments);
 				}
 
@@ -2551,7 +2582,7 @@ SOFTWARE.
 										return new _promise3.default(function (resolve, reject) {
 											db.select().from(classVars).where(pattern).exec().then(function (cursor) {
 												var cnt = 0;
-												if (cursor.count > 0) {
+												if (cursor.count() > 0) {
 													(0, _keys2.default)(cursor.classVarMap).forEach(function (classVar) {
 														var i = cursor.classVarMap[classVar],
 														    cls = classVars[classVar];
@@ -2590,7 +2621,9 @@ SOFTWARE.
 								return new _promise3.default(function (resolve, reject) {
 									var instance = void 0,
 									    thecls = ascls ? ascls : object.constructor;
-									if (thecls.fromJSON) {
+									if (object instanceof thecls) {
+										instance = object;
+									} else if (thecls.fromJSON) {
 										instance = thecls.fromJSON(object);
 									} else {
 										instance = (0, _create2.default)(thecls.prototype);
@@ -2609,6 +2642,9 @@ SOFTWARE.
 								});
 							}
 						};
+					},
+					exec: function exec() {
+						return this.into(object.constructor).exec(object.constructor);
 					}
 				};
 			}
@@ -2617,7 +2653,15 @@ SOFTWARE.
 			value: function select(projection) {
 				var db = this;
 				return {
-					from: function from(classVars) {
+					sample: function sample(confidence, range) {
+						var me = this;
+						return {
+							from: function from(classVars) {
+								return me.from(classVars, confidence, range);
+							}
+						};
+					},
+					from: function from(classVars, confidence, range) {
 						return {
 							where: function where(pattern, restrictVar, instanceId) {
 								return {
@@ -2688,6 +2732,7 @@ SOFTWARE.
 																	return !restrictright[i][prev] || restrictright[i][prev].indexOf(item[db.keyProperty]) >= 0;
 																});
 															}
+															// if confidence and range are used, we will have to generate a more resolved cursor
 															resolve(new Cursor(classes, new CXProduct(collections, filter), projection, classVarMap), matches);
 														});
 														return {
@@ -2699,6 +2744,59 @@ SOFTWARE.
 												}
 											}).catch(function (e) {
 												console.log(e);
+											});
+										});
+									}
+								};
+							}
+						};
+					}
+				};
+			}
+		}, {
+			key: "update",
+			value: function update(classVars) {
+				var db = this;
+				return {
+					set: function set(values) {
+						return {
+							where: function where(pattern) {
+								return {
+									exec: function exec() {
+										return new _promise3.default(function (resolve, reject) {
+											var updated = {},
+											    promises = [];
+											db.select().from(classVars).where(pattern).exec().then(function (cursor, matches) {
+												var vars = (0, _keys2.default)(classVars);
+												promises.push(cursor.forEach(function (row) {
+													row.forEach(function (object, i) {
+														var classVar = vars[i],
+														    activated = void 0;
+														if (values[classVar]) {
+															(0, _keys2.default)(values[classVar]).forEach(function (property) {
+																var value = values[classVar][property];
+																if (value && (typeof value === "undefined" ? "undefined" : (0, _typeof3.default)(value)) === "object") {
+																	var sourcevar = (0, _keys2.default)(value)[0];
+																	if (classVars[sourcevar]) {
+																		var j = vars.indexOf(sourcevar);
+																		value = row[j][value[sourcevar]];
+																	}
+																}
+																activated = activated === false || typeof object[property] === "undefined" ? false : db.activate;
+																if (object[property] !== value) {
+																	object[property] = value;
+																	updated[object[db.keyProperty]] = true;
+																}
+															});
+															if (!activated) {
+																promises.push(db.save(object).exec());
+															}
+														}
+													});
+												}));
+											});
+											_promise3.default.all(promises).then(function () {
+												resolve((0, _keys2.default)(updated).length);
 											});
 										});
 									}
@@ -2752,6 +2850,7 @@ SOFTWARE.
 		return ReasonDB;
 	}();
 
+	ReasonDB.prototype.save = ReasonDB.prototype.insert;
 	ReasonDB.LocalStore = LocalStore;
 	ReasonDB.MemStore = MemStore;
 	ReasonDB.LocalForageStore = LocalForageStore;

@@ -165,19 +165,24 @@ SOFTWARE.
 		}
 		forEach(f) {
 			let cursor = this,
+				promises = [],
 				i = 0;
 			function rows() {
 				let row = cursor.get(i);
 				if(row) {
-					f(row,i,cursor);
+					let result = f(row,i,cursor);
+					if(!(result instanceof Promise)) {
+						result = Promise.resolve(result);
+					}
+					promises.push(result);
 				}
 				i++;
-				if(i<cursor.cxproduct.length) {
+				if(i < cursor.cxproduct.length) {
 					rows();
 				}
 			}
 			rows();
-			return i;
+			return Promise.all(promises);
 		}
 		every(f) {
 			let cursor = this,
@@ -256,7 +261,8 @@ SOFTWARE.
 						if(row) {
 							row.forEach((item) => {
 								if(item.constructor.index) {
-									item.constructor.index.activate(item,false); // activate objects right before returning
+									let db = item.constructor.index.__metadata__.store.db();
+									item.constructor.index.index(item,false,db.activate); // activate objects right before returning
 								}
 							});
 						}
@@ -527,6 +533,9 @@ SOFTWARE.
 						value = pattern[key],
 						type = typeof(value);
 					if(!node) {
+						if(type==="undefined") {
+							return true;
+						}
 						results[classVar] = [];
 						return false;
 					}
@@ -564,11 +573,20 @@ SOFTWARE.
 				//	reject(new Error("Join patterns must include at least one literal, predicate, or sub-object condition: " + JSON.stringify(pattern)));
 				//}
 				if(results[classVar] && results[classVar].length===0) { resolve([]); return; }
+				let exclude = [];
 				nodes.every((node,i) => {
 					if(!literals[i]) { return true; }
 					let key = keys[i],
 						value = pattern[key],
 						type = typeof(value);
+					if(type==="undefined") {
+						Object.keys(node).forEach((testValue) => {
+							Object.keys(node[testValue]).forEach((testType) => {
+								exclude = exclude.concat(Object.keys(node[testValue][testType]));
+							});
+						});
+						return true;
+					}
 					if(!node[value] || !node[value][type]) { 
 						results[classVar] = []; 
 						return false;
@@ -582,10 +600,19 @@ SOFTWARE.
 					if(!tests[i]) { return true; }
 					let key = keys[i],
 						predicate = pattern[key],
-						testnaindex = Object.keys(predicate)[0],
-						value = predicate[testnaindex],
-						test = Index[testnaindex],
+						testname = Object.keys(predicate)[0],
+						value = predicate[testname],
+						type = typeof(value),
+						test = Index[testname],
 						ids = [];
+					if(type==="undefined" && (testname==="$eq" || testname==="$eeq")) {
+						Object.keys(node).forEach((testValue) => {
+							Object.keys(node[testValue]).forEach((testType) => {
+								exclude = exclude.concat(Object.keys(node[testValue][testType]));
+							});
+						});
+						return true;
+					}
 					Object.keys(node).forEach((testValue) => {
 						Object.keys(node[testValue]).forEach((testType) => {
 							if(test(Index.coerce(testValue,testType),value)) {
@@ -672,7 +699,7 @@ SOFTWARE.
 							results[classVar] = (results[classVar] && leftids.length>0 ? intersection(results[classVar],leftids) : leftids);
 							return results[classVar] && results[classVar].length > 0;
 						});
-						if(results[classVar] && results[classVar].length>0) { resolve(results[classVar]); return; }
+						if(results[classVar] && results[classVar].length>0) { resolve(results[classVar].filter((item) => { return exclude.indexOf(item)===-1; })); return; }
 						resolve([]);
 					});
 				});
@@ -680,23 +707,25 @@ SOFTWARE.
 		}
 		async put(object) {
 			let index = this,
-				keyProperty = index.__metadata__.store.keyProperty(),
+				store = index.__metadata__.store,
+				db = store.db(),
+				keyProperty = store.keyProperty(),
 				id = object[keyProperty];
 			if(!id) {
 				id = object[keyProperty] = object.constructor.name +  "@" + (_uuid ? _uuid.v4() : uuid.v4());
 			}
 			if(index[id]!==object) {
 				index[id] = object;
-				index.__metadata__.store.addScope(object);
+				store.addScope(object);
 				try {
-					await index.__metadata__.store.set(id,object,true);
+					await store.set(id,object,db.activate);
 				} catch(e) {
 					console.log(e);
 				}
 			}
-			return index.activate(object,true);
+			return index.index(object,true,db.activate);
 		}
-		async activate(object,reIndex) {
+		async index(object,reIndex,activate) {
 			let index = this,
 				store = index.__metadata__.store,
 				keyProperty = store.keyProperty(),
@@ -711,7 +740,7 @@ SOFTWARE.
 						object[fname] = function() {
 							let me = this;
 							f.call(me,...arguments);
-							index.activate(me,true).then(() => {
+							index.index(me,true,db.activate).then(() => {
 								stream(me,db);
 							});
 						}
@@ -734,7 +763,6 @@ SOFTWARE.
 						oldvalue = get.value,
 						oldtype = typeof(oldvalue),
 						type = typeof(value);
-						//unindex = (key===keyProperty && type==="undefined");
 					if(oldtype==="undefined" || oldvalue!=value) {
 						if(type==="undefined") {
 							delete get.value;
@@ -743,7 +771,7 @@ SOFTWARE.
 						}
 						return new Promise((resolve,reject) => {
 							index.get(key,true).then((node) => {
-								node = index[key]; // re-assign since 1) we know it is loaded and initialized, it may have been overwritten by another async
+								node = index[key]; // re-assign since 1) we know it is loaded and initialized, 2) it may have been overwritten by another async
 								if(!instance[keyProperty]) { // object may have been deleted by another async call!
 									if(node[oldvalue] && node[oldvalue][oldtype]) {
 										delete node[oldvalue][oldtype][id];
@@ -806,7 +834,7 @@ SOFTWARE.
 					return Promise.resolve(true);
 				}
 				let writable = desc && !!desc.configurable && !!desc.writable;
-				if(desc && writable && !desc.get && !desc.set) {
+				if(activate && desc && writable && !desc.get && !desc.set) {
 					delete desc.writable;
 					delete desc.value;
 					desc.get = get;
@@ -814,6 +842,7 @@ SOFTWARE.
 					Object.defineProperty(object,key,desc);
 				}
 				if(reIndex) {
+					index.__metadata__.store.set(object[keyProperty],object,true);
 					promises.push(set.call(object,value,true));
 				}
 			});
@@ -1235,7 +1264,7 @@ SOFTWARE.
 		}
 	}
 	class ReasonDB {
-		constructor(name,keyProperty="@key",storageType=MemStore,shared,clear) {
+		constructor(name,keyProperty="@key",storageType=MemStore,shared=true,clear=false,activate=true) { // make the additional args part of a config object, add a config option for active or passive objects
 			let db = this;
 			db.name = name;
 			db.keyProperty = keyProperty;
@@ -1243,6 +1272,7 @@ SOFTWARE.
 			db.clear = clear;
 			db.shared = shared;
 			db.classes = {};
+			db.activate = activate;
 			
 			delete Object.index;
 			db.index(Object,keyProperty,storageType,clear);
@@ -1332,7 +1362,7 @@ SOFTWARE.
 									return new Promise((resolve,reject) => {
 										db.select().from(classVars).where(pattern).exec().then((cursor) => {
 											let cnt = 0;
-											if(cursor.count>0) {
+											if(cursor.count()>0) {
 												Object.keys(cursor.classVarMap).forEach((classVar) => {
 													let i = cursor.classVarMap[classVar],
 														cls = classVars[classVar];
@@ -1369,7 +1399,9 @@ SOFTWARE.
 							return new Promise((resolve,reject) => {
 								let instance,
 									thecls = (ascls ? ascls : object.constructor);
-								if(thecls.fromJSON) {
+								if(object instanceof thecls) {
+									instance = object;
+								} else if(thecls.fromJSON) {
 									instance = thecls.fromJSON(object);
 								} else {
 									instance = Object.create(thecls.prototype);
@@ -1388,13 +1420,24 @@ SOFTWARE.
 							});
 						}
 					}
+				},
+				exec() {
+					return this.into(object.constructor).exec(object.constructor);
 				}
 			}
 		}
 		select(projection) {
 			var db = this;
 			return {
-				from(classVars) {
+				sample(confidence,range) {
+					let me = this;
+					return {
+						from(classVars) {
+							return me.from(classVars,confidence,range);
+						}
+					}
+				},
+				from(classVars,confidence,range) {
 					return {
 						where(pattern,restrictVar,instanceId) {
 							return {
@@ -1463,12 +1506,64 @@ SOFTWARE.
 															return !restrictright[i][prev] || restrictright[i][prev].indexOf(item[db.keyProperty])>=0;
 														});
 													}
+													// if confidence and range are used, we will have to generate a more resolved cursor
 													resolve(new Cursor(classes,new CXProduct(collections,filter),projection,classVarMap),matches);
 												});
 												return null;
 											}
 										}).catch((e) => {
 											console.log(e);
+										});
+									});
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		update(classVars) {
+			var db = this;
+			return {
+				set(values) {
+					return {
+						where(pattern) {
+							return {
+								exec() {
+									return new Promise((resolve,reject) => {
+										let updated = {},
+											promises = [];
+										db.select().from(classVars).where(pattern).exec().then((cursor,matches) => {
+											let vars = Object.keys(classVars);
+											promises.push(cursor.forEach((row) => {
+												row.forEach((object,i) => {
+													let classVar = vars[i],
+														activated;
+													if(values[classVar])  {
+														Object.keys(values[classVar]).forEach((property) => {
+															let value = values[classVar][property];
+															if(value && typeof(value)==="object") {
+																let sourcevar = Object.keys(value)[0];
+																if(classVars[sourcevar]) {
+																	let j = vars.indexOf(sourcevar);
+																	value = row[j][value[sourcevar]];
+																}
+															}
+															activated = (activated===false || typeof(object[property])==="undefined" ? false : db.activate);
+															if(object[property]!==value) {
+																object[property] = value;
+																updated[object[db.keyProperty]] = true;
+															}
+														});
+														if(!activated) {
+															promises.push(db.save(object).exec());
+														}
+													}
+												});
+											}));
+										});
+										Promise.all(promises).then(() => {
+											resolve(Object.keys(updated).length);
 										});
 									});
 								}
@@ -1507,6 +1602,7 @@ SOFTWARE.
 			}
 		}
 	}
+	ReasonDB.prototype.save = ReasonDB.prototype.insert;
 	ReasonDB.LocalStore = LocalStore;
 	ReasonDB.MemStore = MemStore;
 	ReasonDB.LocalForageStore = LocalForageStore;

@@ -1,6 +1,6 @@
 {
   "name": "ReasonDB",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A 100% JavaScript client and server database with a SQL like syntax, streaming analytics, 18 built-in predicates, in-line fat arrow predicates, predicate extensibility, indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 45K.",
   "main": "lib/index.js",
   "client": "./browser/reasondb.js",

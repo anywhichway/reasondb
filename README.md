@@ -44,10 +44,11 @@ if(typeof(window)==="undefined") {
 
 // Create a database at the directory location provided using @key as the primary key on all objects.
 // Store data using localStorage. In the browser this is window.localStorage and the directory location is ignored.
-// On the server JSON files are created. The arguments `true` and `true` force the sharing of indexes across
-// objects and the creation of new storage and indexes each time the example is run.
+// On the server JSON files are created. The arguments `true`, `true`, and `true` force the sharing of indexes across
+// objects, the creation of new storage and indexes each time the example is run, and the activation of all inserted objects
+// such that changes to them automatically update the database and indexes.
 
-let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true,true);
+let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true,true,true);
 
 // Define a Person class. Classes are optional. ReasonDB can store items of type Object, Array, and Date by default.
 class Person {
@@ -60,9 +61,15 @@ class Person {
 // database creation parameters above.
 db.index(Person);
 // Create a streaming analytics rule that fires every time a Person is added to the database.
-db.when({$p: {name: {$neq: null}}}).from({$p: Person}).select().then((cursor) => { 
+db.when({$p: {name: {$neq: null}, partner: undefined}}).from({$p: Person}).select().then((cursor) => { 
 	cursor.forEach((row) => {
 		console.log("New " + row[0].constructor.name + ":",JSON.stringify(row[0]));
+	});
+});
+//Create a streaming analytics rule that fires every time a Person is updated with a partner.
+db.when({$p: {partner: {$neq: null}}}).from({$p: Person}).select().then((cursor) => { 
+	cursor.forEach((row) => {
+		console.log("Updated " + row[0].constructor.name + ":",JSON.stringify(row[0]));
 	});
 });
 Promise.all([
@@ -97,7 +104,8 @@ Promise.all([
 	        		   db.select().from({$p: Person}).where({$p: {name: {$neq: null}, birthday:{date:14,month:0}}}).exec().then((cursor) => {
 	        			  cursor.forEach((row) => { console.log("Born Jan 15th:",JSON.stringify(row[0])); }); 
 	        		   });
-	        		  
+	        		  // Update the partner for all Persons, the last update will "win"
+	        		   db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec();
 	        	   });
 	           });
 ```
@@ -124,7 +132,7 @@ Query patterns take the top level form: `{<classVariable>: {<property>: {<predic
 
 `predicate` can be any of the supported predicates, see Predicates below.
 
-Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age betwen 18 and 20 inclusive in the states of Ohio, Indiana, and washington.
+Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age betwen 18 and 20 inclusive in the states of Ohio, Indiana, and Washington.
 
 ### Insert
 
@@ -158,7 +166,7 @@ In order to optimize memory and speed, objects are not retrieved from the databa
 
 `db.when(<pattern>).from({<classVariable>: <class>[,...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
 
-Whenever `<pattern>` is matched based on new data being inserted or existing data being changed the function specified in `then` will be invoked.
+Whenever `<pattern>` is matched based on new data being inserted or existing data being changed, the function specified in `then` will be invoked.
 
 #### Projections
 
@@ -175,7 +183,9 @@ Select statements can join data from across classes in the `where` and `when` cl
 
 ### Update
 
-There is currently no update statement since updates to an object automatically update the database.
+`db.update({<classVariable>: <class>[,...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [,...]} [,...]}).where(<pattern>).exec()`
+
+For exampe: `db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}})` pairs Persons and adds partner names.
 
 
 ### Direct Index Matching
@@ -252,6 +262,8 @@ For code quality assessment purposes, the cyclomatic complexity threshold is set
 
 
 ## Updates (reverse chronological order)
+
+2016-10-28 v0.0.6 Added Update statement. Enhanced database to take a start-up flag that makes activating objects for automatic database and index update optional. Repaired 'delete' which broke when cursor.count was changed to a function. Added documentation. Published to npm.
 
 2016-10-27 v0.0.5 Added documentation. Repaired 'when' which broke when cursor.count was changed to a function. Published to npm.
 

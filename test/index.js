@@ -22,21 +22,23 @@ function decaf() {
 }
 
 let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore;
-	clear = true;
+	shared = true,
+	clear = true,
+	activate = false;
 
 if(store===ReasonDB.LocalForageStore || typeof(window)==="undefined") {
 	decaf(); // localForage fails when using mocha and mocha fails when run in server mode!
 }
 	
 
-let db = new ReasonDB("Test","@key",store,true,clear), //MemStore, LocalStore, LocalForageStore
+let db = new ReasonDB("Test","@key",store,shared,clear,activate),
 	i = Object.index,
 		promises = [],
 		resolver,
 		promise = new Promise((resolve,reject) => {
 			resolver = resolve;
 		}),
-		o1 = {name: "Joe", age:24, birthday: new Date("01/15/90"), address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
+		o1 = {name: "Joe", age:24, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
 		p1= {name:"Mary",age:21,children:[1,2,3]};
 	if(clear) {
 		let a1 = {city:"Seattle",zipcode:{base:98101,plus4:1234}},
@@ -286,6 +288,30 @@ promise.then((results) => {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).exec().then((cursor) => { 
 					expect(cursor.count()).to.equal(2); 
 					done(); 
+				});
+			});
+			it('db.select().from({$e1: Object}).where({$e1: {ssn: 999999999}})',function(done) {
+				db.select().from({$e1: Object}).where({$e1: {ssn: 999999999}}).exec().then((cursor) => {
+					expect(cursor.count()).to.equal(1);
+					let row = cursor.get(0),
+						id = row[0]["@key"],
+						promise;
+					expect(row[0].ssn).to.equal(999999999);
+					row[0].ssn = 111111111;
+					if(!activate) {
+						promise = db.save(row[0]).exec();
+					} else {
+						promise = Promise.resolve();
+					}
+					promise.then(() => {
+						db.select().from({$e1: Object}).where({$e1: {ssn: 111111111}}).exec().then((cursor) => {
+							expect(cursor.count()).to.equal(1);
+							let row = cursor.get(0);
+							expect(row[0].ssn).to.equal(111111111);
+							expect(row[0]["@key"]).to.equal(id);
+							done();
+						});
+					});
 				});
 			});
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$: (v) => { return v==="Joe"; }}}})', function(done) {
