@@ -305,7 +305,7 @@ ReasonDB supports the indexing of hidden and computed values. Just add an Array 
 
 ***Note*** Functions must be callable with no arguments or default values for all arguments.
 
-## Forcing Redindexing
+## Forcing Reindexing
 
 Sometimes it may be necessary to force a re-index of an object based on changes that are a side effect of calling a method. The approach to handling this is similar to indexing computed values. Just add a class property called `.reindexCalls` than lists the methods you wish to drive re-indexing.  Below is the ReasonDB definition for `Array`. `Date` is handled in a similar manner.
 
