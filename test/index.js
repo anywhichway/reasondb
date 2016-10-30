@@ -3,7 +3,7 @@ if(typeof(window)==="undefined") {
 	chai = require("chai");
 	expect = chai.expect;
 	//Promise = require("bluebird");
-	ReasonDB = require("../lib/index.js");
+	ReasonDB = require("../src/index.js");
 }
 
 function decaf() {
@@ -12,41 +12,46 @@ function decaf() {
 		group.call({timeout:()=>{}});
 	};
 	it = function it(name,test) {
+		function done() {
+			done.passed = true;
+		}
 		try {
-			test.call({timeout:()=>{}},()=>{});
-			console.log(name);
+			test.call({timeout:()=>{}},done);
 		} catch(e) {
 			console.log(name,e);
 		}
+		setTimeout(() => { console.log((done.passed ? "Passed" : "Failed"),name); },2000)
 	};
 }
 
 let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore;
-	shared = true,
 	clear = true,
-	activate = false;
+	activate = true;
 
 if(store===ReasonDB.LocalForageStore || typeof(window)==="undefined") {
 	decaf(); // localForage fails when using mocha and mocha fails when run in server mode!
 }
 	
 
-let db = new ReasonDB("Test","@key",store,shared,clear,activate),
+let db = new ReasonDB("./test/db","@key",store,clear,activate),
 	i = Object.index,
 		promises = [],
 		resolver,
 		promise = new Promise((resolve,reject) => {
 			resolver = resolve;
 		}),
-		o1 = {name: "Joe", age:24, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
-		p1= {name:"Mary",age:21,children:[1,2,3]};
+		o1 = {name: "Joe", age:function() { return 24; }, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
+		p1= {name:"Mary",age:21,children:[1,2,3],};
 	if(clear) {
 		let a1 = {city:"Seattle",zipcode:{base:98101,plus4:1234}},
 			p2 = {wife:p1,name:"Joe",age:24,address:a1},
 			p3 = {name:"Mary",birthday:new Date(1962,0,15)};
 			//promises = [i.put(o1),i.put(p2),i.put(p1),i.put(p3)];
 			//promises = [i.put(o1),i.put(p2)];
-			i.put(o1).then(() => { i.put(p2).then(() => { i.put(p1).then(() => { i.put(p3).then(() => { resolver(); })})})});
+			i.put(o1).then(() => { 
+				i.put(p2).then(() => { 
+					i.put(p1).then(() => { 
+						i.put(p3).then(() => { resolver(); })})})});
 	} else {
 		resolver();
 	}
@@ -105,18 +110,23 @@ promise.then((results) => {
 					});
 				});
 			});
-			it('{name: {$eq: "Joe"}}',function(done) {
+		/*	it('{name: {$eq: "Joe"}}',function(done) {
 				i.match({name: {$eq: "Joe"}}).then((result) => {
 					result.forEach((key) => {
 						i.flush(key);
 					});
-					i.instances(result).then((result) => {
-						expect(result.length).to.equal(2);
-						expect(result[0].name).to.equal("Joe");
-						done();
+					let promises = [];
+					result.forEach((key) => {
+						promises.push(i.get(key));
 					});
+					Promise.all(promises).then((results) => {
+						expect(results.every((object) => { 
+							return object.name==="Joe"; 
+						})).to.equal(true);
+						done();
+					})
 				});
-			});
+			});*/
 			it('{name: {$neq: "Joe"}}',function(done) {
 				i.match({name: {$neq: "Joe"}}).then((result) => {
 					expect(result.length).to.equal(2);
@@ -178,8 +188,14 @@ promise.then((results) => {
 				});
 			});
 			it('match: {date:15}', function(done) {
-				i.match({date:15}).then((result) => {
+				Date.index.match({date:15}).then((result) => {
 					expect(result.length).to.equal(2);
+					done();
+				});
+			});
+			it('match: {1:2}', function(done) {
+				Array.index.match({1:2}).then((result) => {
+					expect(result.length).to.equal(1);
 					done();
 				});
 			});
@@ -286,109 +302,181 @@ promise.then((results) => {
 		describe("queries (all match criteria above also supported)", function() {
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).exec().then((cursor) => { 
-					expect(cursor.count()).to.equal(2); 
+					expect(cursor.maxCount).to.equal(2); 
 					done(); 
 				});
 			});
 			it('db.select().from({$e1: Object}).where({$e1: {ssn: 999999999}})',function(done) {
+				//this.timeout(2000);
 				db.select().from({$e1: Object}).where({$e1: {ssn: 999999999}}).exec().then((cursor) => {
-					expect(cursor.count()).to.equal(1);
-					let row = cursor.get(0),
-						id = row[0]["@key"],
-						promise;
-					expect(row[0].ssn).to.equal(999999999);
-					row[0].ssn = 111111111;
-					if(!activate) {
-						promise = db.save(row[0]).exec();
-					} else {
-						promise = Promise.resolve();
-					}
-					promise.then(() => {
-						db.select().from({$e1: Object}).where({$e1: {ssn: 111111111}}).exec().then((cursor) => {
-							expect(cursor.count()).to.equal(1);
-							let row = cursor.get(0);
-							expect(row[0].ssn).to.equal(111111111);
-							expect(row[0]["@key"]).to.equal(id);
-							done();
+					expect(cursor.maxCount).to.equal(1);
+					cursor.get(0).then((row) => {
+						let id = row[0]["@key"],
+							promise;
+						let idx = Object.index;
+						expect(row[0].ssn).to.equal(999999999);
+						row[0].ssn = 111111111;
+						if(!activate) {
+							promise = db.save(row[0]).exec();
+						} else {
+							promise = Promise.resolve();
+						}
+						//setTimeout(() => {
+							promise.then(() => {
+								db.select().from({$e1: Object}).where({$e1: {ssn: 111111111}}).exec().then((cursor) => {
+									expect(cursor.maxCount).to.equal(1);
+									cursor.get(0).then((r) => {
+										//console.log(idx===Object.index)
+										//console.log(id,row[0],r[0],row===r)
+										expect(r[0].ssn).to.equal(111111111);
+										expect(r[0]["@key"]).to.equal(id);
+										done();
+									});
+								});
+							//},5000);
 						});
 					});
 				});
 			});
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$: (v) => { return v==="Joe"; }}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$: (v) => { return v==="Joe"; }}}}).exec().then((cursor) => { 
-					expect(cursor.count()).to.equal(2); 
+					expect(cursor.maxCount).to.equal(2); 
 					done(); 
 				});
 			});
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"},birthday:{date:15,day:1}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"},birthday:{date:15,day:1}}}).exec().then((cursor) => { 
-					expect(cursor.count()).to.equal(1); 
+					expect(cursor.maxCount).to.equal(1); 
 					done(); 
 				});
 			});
 			it('db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}})', function(done) {
 			 db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec().then((cursor) => {
-   			  	expect(cursor.count()>0).to.equal(true); 
-				done(); 
+				 cursor.count().then((cnt) => {
+					 expect(cnt>0).to.equal(true); 
+						done(); 
+				 });
 			 });
 			});
 			it('db.select().from({$o1: Object,$o2: Object}).where({$o1: {name: {$neq: {$o2: "name"}}, "@key": {$neq: {$o2: "@key"}}}, $o2: {name: {$neq: null}}})', function(done) {
 				db.select().from({$o1: Object,$o2: Object}).where({$o1: {name: {$neq: {$o2: "name"}}, "@key": {$neq: {$o2: "@key"}}}, $o2: {name: {$neq: null}}}).exec().then((cursor) => {
-					expect(cursor.count()>0).to.equal(true);
-					expect(cursor.every((row,i) => {
-						return row[0]["@key"]!==row[1]["@key"] && row[0].name!==row[1].name;
-					})).to.equal(true);
-					done();
+					cursor.count().then((cnt) => {
+						 expect(cnt>0).to.equal(true); 
+						 cursor.every((row,i) => {
+								return row[0]["@key"]!==row[1]["@key"] && row[0].name!==row[1].name;
+							}).then((result) => {
+								expect(result).to.equal(true);
+								done();
+							})
+					 });
 				});
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$eq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$eq: "Joe"}}}).exec().then((cursor) => { 
-					expect(cursor.count()).to.equal(4); 
-					done(); 
+					 cursor.count().then((cnt) => {
+						 expect(cnt).to.equal(4); 
+							done(); 
+					 });
 				});	
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$neq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: "Joe"}}, $e2: {name: {$neq: "Joe"}}}).exec().then((cursor) => { 
-					expect(cursor.count()).to.equal(4); 
-					done(); 
+					cursor.count().then((cnt) => {
+						 expect(cnt).to.equal(4); 
+							done(); 
+					 }); 
 				});	
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: {$e2: "name"}}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					expect(cursor.every((row) => {
-						return row[0].name!==row[1].name;
-					})).to.equal(true);
-					expect(cursor.count()).to.equal(8);
-					done(); 
+					cursor.count().then((cnt) => {
+						expect(cnt).to.equal(8);
+						cursor.every((row) => {
+							return row[0].name!==row[1].name;
+						}).then((result) => {
+							expect(result).to.equal(true);
+							done();
+						}); 
+					 }); 
 				});
-				
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					expect(cursor.count()).to.equal(8);
-					expect(cursor.every((row) => {
-						return row[0].name===row[1].name;
-					})).to.equal(true);
-					done(); 
+					cursor.count().then((cnt) => {
+						expect(cnt).to.equal(8);
+						cursor.every((row) => {
+							return row[0].name===row[1].name;
+						}).then((result) => {
+							expect(result).to.equal(true);
+							done();
+						});  
+					 }); 
 				});
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					expect(cursor.every((row) => {
-						return row[0].name!==row[1].name;
-					})).to.equal(true); 
-					expect(cursor.count()).to.equal(8);
-					done(); 
+					cursor.count().then((cnt) => {
+						expect(cnt).to.equal(8);
+						cursor.every((row) => {
+							return row[0].name!==row[1].name;
+						}).then((result) => {
+							expect(result).to.equal(true);
+							done();
+						});  
+					 }); 
+				});
+			});
+			it('db.select().first(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
+				db.select().first(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
+					cursor.count().then((cnt) => {
+						expect(cnt).to.equal(4);
+						cursor.every((row) => {
+							return row[0].name!==row[1].name;
+						}).then((result) => {
+							expect(result).to.equal(true);
+							done();
+						});  
+					 }); 
+				});
+			});
+			it('db.select().random(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
+				db.select().random(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
+					cursor.count().then((cnt) => {
+						expect(cnt).to.equal(4);
+						cursor.every((row) => {
+							return row[0].name!==row[1].name;
+						}).then((result) => {
+							expect(result).to.equal(true);
+							done();
+						});  
+					 }); 
+				});
+			});
+			it('db.select().sample(.2,.05).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
+				db.select().sample(.2,.05).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
+					cursor.count().then((cnt) => {
+						expect(cnt).to.equal(4);
+						cursor.every((row) => {
+							return row[0].name!==row[1].name;
+						}).then((result) => {
+							expect(result).to.equal(true);
+							done();
+						});  
+					 }); 
 				});
 			});
 			it('db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: {$e2: "name"}}}, $e2: {name: "Mary"}})', function(done) {
 				db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}, $e2: {name: "Mary"}})
 				.exec().then(function(cursor) {
-					expect(cursor.count()>0).to.equal(true);
-					expect(cursor.every((row) => { 
-						return row.e1name==="Mary" && row.e2name==="Mary"; 
-					})).to.equal(true);
-					done();
+					cursor.count().then((cnt) => {
+						expect(cnt>0).to.equal(true);
+						cursor.every((row) => {
+							return row.e1name==="Mary" && row.e2name==="Mary"; 
+						}).then((result) => {
+							expect(result).to.equal(true);
+							done();
+						}); 
+					 }); 
 				});
 			});
 			/*it('query select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).orderBy({$o1: {name: "asc"}})', function(done) {
@@ -403,11 +491,13 @@ promise.then((results) => {
 		describe("streaming", function() {
 			it('when({$o: {stream: true}}).from({$o: Object}).select()', function(done) {
 				db.when({$o: {stream: true}}).from({$o: Object}).select().then(function(cursor) {
-					expect(cursor.count()).to.equal(1);
-					expect(cursor.every((row) => { 
+					expect(cursor.maxCount).to.equal(1);
+					cursor.every((row) => { 
 						return row[0].stream===true; 
-					})).to.equal(true);
-					done();
+					}).then((result) => {
+						expect(result).to.equal(true);
+						done();
+					});
 				});
 				db.insert({stream:true}).into(Object).exec().then(() => {
 					db.delete().from({$o1: Object}).where({$o1: {stream: true}}).exec();
