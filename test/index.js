@@ -1,9 +1,25 @@
-var chai, expect, ReasonDB;
+var chai,
+	expect,
+	ReasonDB,
+	IronCacheClient,
+	RedisClient,
+	MemJSClient;
 if(typeof(window)==="undefined") {
 	chai = require("chai");
 	expect = chai.expect;
 	//Promise = require("bluebird");
-	ReasonDB = require("../src/index.js");
+	ReasonDB = require("../lib/index.js");
+	//IronCacheClient = require("iron-cache").createClient({"project":"","token":""});
+	//RedisClient = require("redis").createClient(,"",{no_ready_check: true});
+	//RedisClient.auth("",function(err) {
+	//	if(err) {
+	//		console.log(err);
+	//	}
+	//});
+	//RedisClient.on("connect", function() {
+	//    console.log('Connected to Redis');
+	//});
+	//MemJSClient = require("memjs").Client.create("",{username: "", password:""});
 }
 
 function decaf() {
@@ -24,7 +40,7 @@ function decaf() {
 	};
 }
 
-let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore;
+let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore,ReasonDB.IronCacheStore,ReasonDB.RedisStore,ReasonDB.MemcachedStore;
 	clear = true,
 	activate = true;
 
@@ -33,7 +49,7 @@ if(store===ReasonDB.LocalForageStore || typeof(window)==="undefined") {
 }
 	
 
-let db = new ReasonDB("./test/db","@key",store,clear,activate),
+let db = new ReasonDB("./test/db","@key",store,clear,activate,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient}),
 	i = Object.index,
 		promises = [],
 		resolver,
@@ -110,23 +126,25 @@ promise.then((results) => {
 					});
 				});
 			});
-		/*	it('{name: {$eq: "Joe"}}',function(done) {
-				i.match({name: {$eq: "Joe"}}).then((result) => {
-					result.forEach((key) => {
-						i.flush(key);
+			if(store!=ReasonDB.IronCacheStore) { // due to delays in restoring objects and variable promise sequencing, this test fails and breaks other tests under IronCache
+				it('{name: {$eq: "Joe"}}',function(done) {
+					i.match({name: {$eq: "Joe"}}).then((result) => {
+						result.forEach((key) => {
+							i.flush(key);
+						});
+						let promises = [];
+						result.forEach((key) => {
+							promises.push(i.get(key));
+						});
+						Promise.all(promises).then((results) => {
+							expect(results.every((object) => { 
+								return object.name==="Joe"; 
+							})).to.equal(true);
+							done();
+						})
 					});
-					let promises = [];
-					result.forEach((key) => {
-						promises.push(i.get(key));
-					});
-					Promise.all(promises).then((results) => {
-						expect(results.every((object) => { 
-							return object.name==="Joe"; 
-						})).to.equal(true);
-						done();
-					})
 				});
-			});*/
+			}
 			it('{name: {$neq: "Joe"}}',function(done) {
 				i.match({name: {$neq: "Joe"}}).then((result) => {
 					expect(result.length).to.equal(2);
@@ -307,7 +325,6 @@ promise.then((results) => {
 				});
 			});
 			it('db.select().from({$e1: Object}).where({$e1: {ssn: 999999999}})',function(done) {
-				//this.timeout(2000);
 				db.select().from({$e1: Object}).where({$e1: {ssn: 999999999}}).exec().then((cursor) => {
 					expect(cursor.maxCount).to.equal(1);
 					cursor.get(0).then((row) => {
@@ -321,19 +338,15 @@ promise.then((results) => {
 						} else {
 							promise = Promise.resolve();
 						}
-						//setTimeout(() => {
-							promise.then(() => {
-								db.select().from({$e1: Object}).where({$e1: {ssn: 111111111}}).exec().then((cursor) => {
-									expect(cursor.maxCount).to.equal(1);
-									cursor.get(0).then((r) => {
-										//console.log(idx===Object.index)
-										//console.log(id,row[0],r[0],row===r)
-										expect(r[0].ssn).to.equal(111111111);
-										expect(r[0]["@key"]).to.equal(id);
-										done();
-									});
+						promise.then(() => {
+							db.select().from({$e1: Object}).where({$e1: {ssn: 111111111}}).exec().then((cursor) => {
+								expect(cursor.maxCount).to.equal(1);
+								cursor.get(0).then((row) => {
+									expect(row[0].ssn).to.equal(111111111);
+									expect(row[0]["@key"]).to.equal(id);
+									done();
 								});
-							//},5000);
+							});
 						});
 					});
 				});
@@ -479,7 +492,7 @@ promise.then((results) => {
 					 }); 
 				});
 			});
-			/*it('query select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).orderBy({$o1: {name: "asc"}})', function(done) {
+			/*NOT YET SUPPORTED it('query select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).orderBy({$o1: {name: "asc"}})', function(done) {
 				db.select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).orderBy({$o1: {name: "asc"}}).exec().then((cursor) => {
 					expect(cursor.every((row) => { return row.name==="Joe"; })).to.equal(true);
 					expect(cursor.some((row) => { return row.name==="Joe"; })).to.equal(true);
@@ -503,7 +516,7 @@ promise.then((results) => {
 					db.delete().from({$o1: Object}).where({$o1: {stream: true}}).exec();
 				});
 			});
-			/*it('when({$o: {birthday: {month:1}}).from({$o: Object}).select()', function(done) {
+			/*NOT YET SUPPORTED it('when({$o: {birthday: {month:1}}).from({$o: Object}).select()', function(done) {
 				db.when({$o: {birthday: {month:1}}}).from({$o: Object}).select().then(function(cursor) {
 					expect(cursor.count()).to.equal(1);
 					expect(cursor.every((row) => { 

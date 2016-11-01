@@ -38,8 +38,11 @@
     "browserify": "^13.0.0",
     "chai": "^3.4.1",
     "codeclimate-test-reporter": "^0.2.0",
+    "iron-cache": "^0.3.0",
     "istanbul": "^0.4.2",
-    "mocha": "^2.3.4"
+    "memjs": "^0.10.0",
+    "mocha": "^2.3.4",
+    "redis": "^2.6.2"
   },
   "dependencies": {
     "babel-runtime": "^6.11.6",

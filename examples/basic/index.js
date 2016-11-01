@@ -1,12 +1,27 @@
-var ReasonDB;
+var ReasonDB,
+	IronCacheClient,
+	RedisClient,
+	MemJSClient;
 if(typeof(window)==="undefined") {
 	ReasonDB = require("../../lib/index.js"); // Load ReasonDB if running on the server.
+	//IronCacheClient = require("iron-cache").createClient({"project":"/","token":"/"});
+	//RedisClient = require("redis").createClient(,"",{no_ready_check: true});
+	//RedisClient.auth("",function(err) {
+	//	if(err) {
+	//		console.log(err);
+	//	}
+	//});
+	//RedisClient.on("connect", function() {
+	//    console.log('Connected to Redis');
+	//});
+	//MemJSClient = require("memjs").Client.create("",{username: "", password:""});
 }
 //Create a database at the directory location provided using @key as the primary key on all objects.
 //Store data using localStorage. In the browser this is window.localStorage and the directory location is ignored.
-//On the server JSON files are created. The argument `true` forces the creation of new storage and indexes each 
-//time the example is run.
-let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true);
+//On the server JSON files are created. The first argument `true` forces the creation of new storage and indexes each 
+//time the example is run, the second ensures objects are activated.
+let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true,true,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient});
+
 
 // Define a Person class. Classes are optional. ReasonDB can store items of type Object, Array, and Date by default.
 class Person {

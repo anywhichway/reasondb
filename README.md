@@ -1,6 +1,8 @@
 # reasondb
 
-A 100% native JavaScript browser or NodeJS database with a SQL like syntax (JOQULAR), JSON projections or live object result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, swapable persistence engines, built in statistical sampling, and automatic synchronization of object changes into the database and indexes in as little as 55K.
+A 100% native JavaScript browser or NodeJS database with a SQL like syntax (JOQULAR), JSON projections or live object result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, swapable persistence engines, built in statistical sampling, and automatic synchronization of object changes into the database and indexes in less than 60K.
+
+Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, and IronCache. Or, add your own favoriate store in just an hour (we timed ourselves for Redis and MemCached :-).
 
 
 ## Installation
@@ -11,20 +13,20 @@ npm install reasondb
 
 ### Loading
 
-Users of Chrome 54.0 and greater can use the file at src/index.js so long as node-uuid is loaded first (55K): 
+Users of Chrome 54.0 and greater can use the file at src/index.js so long as node-uuid is loaded first (57K): 
 
 ```
 <script src="../node_modules/node-uuid/uuid.js"></script>
 <script src="../src/index.js"></script>
 ```
 
-A browserified version is located at browser/reasondb.js (765K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chome is almost twice as fast as either Firefox or Edge.
+A browserified version is located at browser/reasondb.js (185K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chome is almost twice as fast as either Firefox or Edge.
 
 ```
 <script src="../browser/reasondb.js"></script>
 ```
 
-NodeJS 6.x users can use a smaller babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (91K): 
+NodeJS 6.x users can use a smaller babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (105K): 
 
 ```
 require("index.js");
@@ -114,7 +116,7 @@ Promise.all([
 	           });
 ```
 
-Review other files in the example directory or the unit tests under the test directory for more examples. Examples and unit tests can be run in the browser by loading the index.html file. The same examples and tests can be run in node.js by executing the index.js file.
+Review other files in the example directory or the unit tests under the test directory for more examples. Examples and unit tests can be run in the browser by loading the index.html file. The same examples and tests can be run in node.js by executing the index.js file from the command line, e.g. `node test/index.js`.
 
 **Note**: Mocha and Instanbul currently break with ReasonDB under NodeJS even though they work in the browser. Test code is "decaffinated" prior to executing in NodeJS.
 
@@ -126,25 +128,42 @@ The notation below uses the following conventions:
 
 2) Optional elements are further surrounded by square brackets, e.g. `[< >]`.
 
-3) Elipses, `...`, indicates the immediatly previous form can be repeated.
+3) Elipses, `...`, indicates the immediately previous form can be repeated.
 
 ## Creating A Database
 
-The ReasonDB constructor signature is: `ReasonDB(<nameOrPath>,<uniqueKeyName>,<storageType>,clear=false)`
+The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>"="@key",<storageType>,clear=false,activate=true,{<options>}={})`
 
-<nameOrPath> is currently ignored except when using ReasonDB.LocalStore on NodeJS. In which case it is a path relative to the execution context.
+`<nameOrPath>` - See storage types below for use.
 
-The currently available storage types are `ReasonDB.MemStore`, `ReasonBD.LocalStore`, `ReasonDB.LocalForageStore`.
+`<uniqueKeyName>` - The property to add to objects to uniquely identify them. Using anything other than "@key" has not been heavily tested at this point.
 
-1) `ReasonDB.MemStore` provides a high-speed in memory database.
+`<storageType>` - The currently available storage types are:
 
-2) `ReasonBD.LocalStore` uses browser localStorage in Chrome and Firefox. In NodeJS the same API saves to disk with no quota limitations.
+1) `ReasonDB.MemStore` provides a high-speed in memory database. `<nameOrPath>` is ignored.
 
-3) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser.
+2) `ReasonBD.LocalStore` uses browser localStorage in Chrome and Firefox. Microsoft Edge just fails. In NodeJS the same API saves to disk with no quota limitations. `<nameOrPath>` is ignored in the browser. On NodeJS, it is a path relative to the execution context of NodeJS.
+
+3) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
+
+4) `ReasonDB.IronCacheStore` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit
+package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. 
+
+5) `ReasonDB.RedisStore` - Create your Redis client before creating the database and pass it in as a property `redisClient` in the options object, e.g. `{redisClient: <theClient>}`. `<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration, but Redis values do not expire unless an expiration is specifically set.  ***Note:*** To limit package dependencies, `redis` is a dev dependency not a package dependency. If you wish to use `redis` you should make it part of your app package. 
+
+6) `ReasonDB.MemcachedStore` - Create your Memcached client before creating the database and pass it in as a property `memcachedClient` in the options object, e.g. `{memcachedClient: <theClient>}`.`<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration.  ***Note:*** To limit package dependencies, `memjs` (the Memcached client) is a dev dependency not a package dependency. If you wish to use `memjs` you should make it part of your app package.
+
+All storage types are referenced in the example and test files, you just need to provide client creation credentials and change the ReasonDB constructor call to test them out.
  
-See ## Extending ReasonDB for how to add new storage types. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
+See ## Extending ReasonDB for how to add new storage types. 
 
 All data stored in ReasonDB, including indexes, is readable as JSON.
+
+`clear` - Clear storage when creating the database.
+
+`activate` - Activat eobjects to automatically update the database and indexes when changed. `false` dooes not currently work but is under development.
+
+`options` - See storage types above for the only current options, which are instantiated storage clients.
 
 ## JOQULAR - JavaScript Object QUery LAnguage Representation
 
@@ -359,7 +378,7 @@ class <StoreName> extends Store {
 		// references to other objects.
 	}
 	normalize(instance) {
-		// An optional utility methos to convert the instance into plain JSON with embedded references 
+		// An optional utility method to convert the instance into plain JSON with embedded references 
 		// to other objects using their keys. Depending on your situation, you may need to make this 
 		// asynchronous and use it so save embedded objects.
 	}
@@ -367,6 +386,22 @@ class <StoreName> extends Store {
 ```
 
 ## Internals
+
+### Philosophy
+
+ReasonDB was designed to:
+
+1) Be 100% JavaScript.
+
+2) Leverage the massive number of hours that have gone into optimizing object access by Mozilla and Google. See [Indexing With JavaScript Objects, Millions Of Ops/Second](http://anywhichway.github.io/indexing.html).
+
+3) Be extensible from a command, predicate, and persistence store perspective.
+
+4) Leverage knowledge of SQL while not compromising native JavaScript syntax and semantics or requiring the implementation of a parser/compiler.
+
+5) Minimize memory usage by large result sets.
+
+6) Simplify initial development by eliminating the need to make decisions about indexing and updating the database. (Don't worry, scaling back indexes or eliminating auto-updates are straight-forward to implement and should show up in v2.0).
 
 ### Indexes & Data Storage
 
@@ -405,11 +440,12 @@ store.set("Person@2",{indentifier: "Mary", age: 21, @key: "Person@2"});
 
 Cursors are asynchronous to simplify integration with third-party storage engines that may already return data asynchronously. Asynchronous cursors will also simplify the creation of client/server based applications.
 
-Most cursors do not store all permutations of combinations on data required to form a row resulting from a query. Instead, they encapsulate a light-weight cross-product engine that given an offset will assemble the row on the fly. See http://phrogz.net/lazy-cartesian-product. The cross-product engine in ReasonDB can also handle join restrictions.
+Most ReasonDB cursors do not store all permutations of data required to form a row resulting from a query. Instead, they encapsulate a light-weight cross-product engine that given an offset will assemble the row on the fly. See http://phrogz.net/lazy-cartesian-product. The cross-product engine in ReasonDB can also handle join restrictions.
 
 The cross-product approach has two values:
 
 1) It dramatically reduces the amount of memory required to represent large result sets.
+
 2) A result set can be returned faster.
 
 As side effect of the above is that it is not currently possible to know the actual number of rows in a cursor without doing additional computation to determine which rows are excluded as a result of join restrictions.
@@ -426,6 +462,8 @@ For code quality assessment purposes, the cyclomatic complexity threshold is set
 
 
 ## Updates (reverse chronological order)
+
+2016-10-31 v0.1.1 Added suppot for IronCache, Redis, and Memcached. Improved documentation.
 
 2016-10-30 v0.1.0 Added `first`, `random`, and `sample` to `select`. Made cursor calls to `forEach`, `every`, `some`, `get` asynchronous. See documentation for rationale. Deprecated shared indexes, they did not scale well under volume and made working with localStorage somewhat obscure. This resulted in dropping the `as` clause for `insert`.
 

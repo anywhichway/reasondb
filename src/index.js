@@ -25,7 +25,7 @@ SOFTWARE.
 	let _uuid;
 	if(typeof(window)==="undefined") {
 		let r = require;
-		_uuid = require("node-uuid");
+		_uuid = r("node-uuid");
 	}
 	
 	/*async function asyncForEach(f) {
@@ -560,6 +560,7 @@ SOFTWARE.
 								index.index(value,false,db.activate).then(() => {
 									resolve(value);
 								});
+								resolve(value);
 							} else {
 								resolve(index[key]);
 							}
@@ -872,19 +873,20 @@ SOFTWARE.
 							value = value.call(instance);
 							type = typeof(value);
 						}
+						//set.queue.push({value:value,type:type});
 						return new Promise((resolve,reject) => {
-							index.get(key,true).then((node) => {
-								node = index[key]; // re-assign since 1) we know it is loaded and initialized, 2) it may have been overwritten by another async
-								if(!instance[keyProperty]) { // object may have been deleted by another async call!
-									if(node[oldvalue] && node[oldvalue][oldtype]) {
-										delete node[oldvalue][oldtype][id];
-									}
-									resolve(true);
-									return;
-								} 
-								if(value && type==="object") {
-									let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
-									promise.then(() => {
+							//let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
+							//promise.then(() => { 
+								index.get(key,true).then((node) => {
+									node = index[key]; // re-assign since 1) we know it is loaded and initialized, 2) it may have been overwritten by another async
+									if(!instance[keyProperty]) { // object may have been deleted by another async call!
+										if(node[oldvalue] && node[oldvalue][oldtype]) {
+											delete node[oldvalue][oldtype][id];
+										}
+										resolve(true);
+										return;
+									} 
+									if(value && type==="object") {
 										let ocls = value.constructor,
 											oindex = ocls.index;
 										if(!oindex) {
@@ -900,21 +902,30 @@ SOFTWARE.
 												node[okey][otype] = {};
 											}
 											node[okey][otype][id] = true;
-											index.save(key).then(() => {
-												if(!first) { // first handled by put
-													metadata.store.set(id,instance,true)
-													stream(object,db);
-												}
-												resolve(true);
+											let restorable = false;
+											if(node[oldvalue] && node[oldvalue][oldtype]) {
+												delete node[oldvalue][oldtype][id];
+												restorable = true;
+											}
+											let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
+											Promise.resolve().then(() => { 
+												index.save(key).then(() => {
+													if(!first) {
+														stream(object,db);
+													}
+													resolve(true);
+												}).catch((e) => {
+													throw(e);
+												});
 											}).catch((e) => {
 												delete node[okey][otype][id];
-											});
+												if(restorable) {
+													node[oldvalue][oldtype][id] = true;
+												}
+											});;
+											
 										});
-										return null;
-									});
-								} else if(type!=="undefined") {
-									let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
-									promise.then(() => { 
+									} else if(type!=="undefined") {
 										if(!node[value]) {
 											node[value] = {};
 										}
@@ -927,24 +938,28 @@ SOFTWARE.
 											delete node[oldvalue][oldtype][id];
 											restorable = true;
 										}
-										index.save(key).then(() => {
-											if(!first) { // first handled by insert
-												metadata.store.set(id,instance,true)
-												stream(object,db);
-											}
-											resolve(true);
+										let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
+										Promise.resolve().then(() => { 
+											index.save(key).then(() => {
+												if(!first) {
+													stream(object,db);
+												}
+												resolve(true);
+											}).catch((e) => {
+												throw(e);
+											});
 										}).catch((e) => {
 											delete node[value][type][id];
 											if(restorable) {
 												node[oldvalue][oldtype][id] = true;
 											}
 										});
-										return null;
-									});
-								}
-							});
+									}
+								});
+							//});
 						});
 					}
+					//set.queue = []; not yet used
 					return Promise.resolve(true);
 				}
 				let writable = desc && !!desc.configurable && !!desc.writable;
@@ -1225,6 +1240,211 @@ SOFTWARE.
 			return true;
 		}
 	}
+	class IronCacheStore extends Store {
+		constructor(name,keyProperty,db,clear) {
+			super(name,keyProperty,db);
+			if(clear) {
+				this.clear();
+			}
+		}
+		async clear() {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.ironCacheClient.clearCache(me.__metadata__.name, function(err, res) {
+					if (err) {
+						resolve(false);
+					} else {
+						//console.log(res);
+						resolve(true);
+					}
+				});
+			});
+		}
+		async delete(key) {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.ironCacheClient.del(me.__metadata__.name, key, function(err, res) {
+					if (err) {
+						//console.log("del ",err);
+						reject(err);
+					} else {
+						//console.log(res);
+						resolve(true);
+					}
+				});
+			});
+		}
+		async get(key) {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.ironCacheClient.get(me.__metadata__.name, key, function(err, res) {
+					if (err) {
+						resolve();
+					} else {
+						//console.log(res);
+						me.restore(JSON.parse(res.value)).then((value) => {
+							resolve(value);
+						});
+					}
+				});
+			});
+		}
+		async set(key,value,normalize) {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.ironCacheClient.put(me.__metadata__.name, key, { value: JSON.stringify((normalize ? me.normalize(value) : value)) }, function(err, res) {
+					if (err) {
+						reject(err);
+					} else {
+						//console.log(res);
+						resolve(true);
+					}
+				});
+			});
+		}
+	}
+	class RedisStore extends Store {
+		constructor(name,keyProperty,db,clear) {
+			super(name,keyProperty,db);
+			if(clear) {
+				this.clear();
+			}
+		}
+		async clear() {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.redisClient.flushdb(function(err, res) {
+					if (err) {
+						//console.log("clear ",err);
+						resolve(false);
+					} else {
+						//console.log("clear",res);
+						resolve(true);
+					}
+				});
+			});
+		}
+		async delete(key) {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.redisClient.del(key, function(err, res) {
+					if (err) {
+						//console.log("del ",err);
+						reject(err);
+					} else {
+						//console.log("del ",res);
+						resolve(true);
+					}
+				});
+			});
+		}
+		async get(key) {
+			let me = this;
+			//console.log("get ", key);
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.redisClient.get(key, function(err, value, key) {
+					if (err) {
+						//console.log("get ",key,err);
+						resolve();
+					} else {
+						//console.log("get ",key,value);
+						if(!value) {
+							resolve();
+						} else {
+							me.restore(JSON.parse(value)).then((value) => {
+								resolve(value);
+							});
+						}
+					}
+				});
+			});
+		}
+		async set(key,value,normalize) {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.redisClient.set(key, JSON.stringify((normalize ? me.normalize(value) : value)), function(err, res) {
+					if (err) {
+						//console.log("set ",err);
+						reject(err);
+					} else {
+						//console.log("set",res);
+						resolve(true);
+					}
+				});
+			});
+		}
+	}
+	class MemcachedStore extends Store {
+		constructor(name,keyProperty,db,clear) {
+			super(name,keyProperty,db);
+			if(clear) {
+				this.clear();
+			}
+		}
+		async clear() {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.memcachedClient.flush(function(err, res) {
+					if (err) {
+						//console.log("clear ",err);
+						resolve(false);
+					} else {
+						//console.log("clear",res);
+						resolve(true);
+					}
+				});
+			});
+		}
+		async delete(key) {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.memcachedClient.delete(key, function(err, res) {
+					if (err) {
+						//console.log("del ",err);
+						reject(err);
+					} else {
+						//console.log("del ",res);
+						resolve(true);
+					}
+				});
+			});
+		}
+		async get(key) {
+			let me = this;
+			//console.log("get ", key);
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.memcachedClient.get(key, function(err, value, key) {
+					if (err) {
+						//console.log("get ",key,err);
+						resolve();
+					} else {
+						//console.log("get ",key,value);
+						if(!value) {
+							resolve();
+						} else {
+							me.restore(JSON.parse(value)).then((value) => {
+								resolve(value);
+							});
+						}
+					}
+				});
+			});
+		}
+		async set(key,value,normalize) {
+			let me = this;
+			return new Promise((resolve,reject) => {
+				me.__metadata__.db.memcachedClient.set(key, JSON.stringify((normalize ? me.normalize(value) : value)), function(err, res) {
+					if (err) {
+						//console.log("set ",err);
+						reject(err);
+					} else {
+						//console.log("set",res);
+						resolve(true);
+					}
+				});
+			});
+		}
+	}
 	class LocalStore extends Store {
 		constructor(name,keyProperty,db,clear) {
 			super(name,keyProperty,db);
@@ -1233,7 +1453,7 @@ SOFTWARE.
 			} else {
 				let r = require,
 					LocalStorage = r("./LocalStorage.js").LocalStorage;
-				this.__metadata__.storage = new LocalStorage(db.name + "/" + name);
+				this.__metadata__.storage = new LocalStorage(db.name);
 			}
 			if(clear) {
 				this.__metadata__.storage.clear();
@@ -1255,7 +1475,7 @@ SOFTWARE.
 			}
 			return false;
 		}
-		async get(key) {
+		async get(key,recursing) {
 			let value = this.__metadata__.storage.getItem(key+".json");
 			if(value!=null) {
 				this[key] = true;
@@ -1335,14 +1555,21 @@ SOFTWARE.
 		}
 	}
 	class ReasonDB {
-		constructor(name,keyProperty="@key",storageType=MemStore,clear=false,activate=true) { // make the additional args part of a config object, add a config option for active or passive objects
+		constructor(name,keyProperty="@key",storageType,clear=false,activate=true,options={}) { // make the additional args part of a config object, add a config option for active or passive objects
 			let db = this;
+			if(typeof(storageType)==="undefined") {
+				console.log("WARNING: storageType undefined, defaulting to ReasonDB.MemStore.");
+				storageType=MemStore;
+			}
 			db.name = name;
 			db.keyProperty = keyProperty;
 			db.storageType = storageType;
 			db.clear = clear;
 			db.classes = {};
 			db.activate = activate;
+			Object.keys(options).forEach((key) => {
+				db[key] = options[key];
+			});
 			
 			delete Object.index;
 			db.index(Object,keyProperty,storageType,clear);
@@ -1668,6 +1895,9 @@ SOFTWARE.
 	ReasonDB.LocalStore = LocalStore;
 	ReasonDB.MemStore = MemStore;
 	ReasonDB.LocalForageStore = LocalForageStore;
+	ReasonDB.IronCacheStore = IronCacheStore;
+	ReasonDB.RedisStore = RedisStore;
+	ReasonDB.MemcachedStore = MemcachedStore;
 	if(typeof(module)!=="undefined") {
 		module.exports = ReasonDB;
 	}
