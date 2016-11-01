@@ -463,7 +463,7 @@ For code quality assessment purposes, the cyclomatic complexity threshold is set
 
 ## Updates (reverse chronological order)
 
-2016-10-31 v0.1.1 Added suppot for IronCache, Redis, and Memcached. Improved documentation.
+2016-10-31 v0.1.1 Added support for IronCache, Redis, and Memcached. Improved documentation.
 
 2016-10-30 v0.1.0 Added `first`, `random`, and `sample` to `select`. Made cursor calls to `forEach`, `every`, `some`, `get` asynchronous. See documentation for rationale. Deprecated shared indexes, they did not scale well under volume and made working with localStorage somewhat obscure. This resulted in dropping the `as` clause for `insert`.
 
