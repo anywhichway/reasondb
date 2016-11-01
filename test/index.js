@@ -126,7 +126,7 @@ promise.then((results) => {
 					});
 				});
 			});
-			if(store!=ReasonDB.IronCacheStore) { // due to delays in restoring objects and variable promise sequencing, this test fails and breaks other tests under IronCache
+			setTimeout(() => { // due to delays in restoring objects and variable promise sequencing, this test fails and breaks other tests under IronCache unless it is forced to run "last"
 				it('{name: {$eq: "Joe"}}',function(done) {
 					i.match({name: {$eq: "Joe"}}).then((result) => {
 						result.forEach((key) => {
@@ -144,7 +144,7 @@ promise.then((results) => {
 						})
 					});
 				});
-			}
+			},1000);
 			it('{name: {$neq: "Joe"}}',function(done) {
 				i.match({name: {$neq: "Joe"}}).then((result) => {
 					expect(result.length).to.equal(2);

@@ -421,11 +421,56 @@ SOFTWARE.
 			}
 		});
 	}
+	
+	 
+	 class IndexCommandQueue {
+	 	 constructor(target) {
+		 	let me  = this;
+		 	me.queue = [];
+		 	me.target = target;
+		 }
+	 	 add(method,args) {
+	 		 let me = this,
+	 		 	deferred = {},
+	 		 	promise = new Promise((resolve,reject) => { deferred.resolve = resolve; deferred.reject = reject; });
+	 		 me.queue.push({method:method,arguments:args,promise:deferred});
+	 		 if(me.queue.length===1) {
+	 			 setTimeout(me.next());
+	 		 }
+	 		 return promise;
+	 	 }
+		 next() {
+	 	  let me = this,
+	 		action = me.queue.shift(),
+	 		result = me.target["_"+action.method](...action.arguments);
+	 		if(action.method==="delete") {
+	 			while(me.queue.length>0 && me.queue[0].method!=="put") {
+	 				me.queue.shift();
+	 			}
+	 		}
+	 		if(result instanceof Promise) {
+	 			result.then((result) => {
+	 				action.promise.resolve(result);
+	 				if(me.queue.length>0) {
+	 					me.next();
+	 				}
+	 			});
+	 		} else {
+	 			action.promise.resolve(result);
+	 			if(me.queue.length>0) {
+	 				me.next();
+	 			}
+	 		}
+	 	}
+	 }
+	 
+	 
 	class Index {
 		constructor(cls,keyProperty="@key",db,StorageType=(db ? db.storageType : MemStore),clear=(db ? db.clear : false)) {
-			let store = new StorageType(cls.name,keyProperty,db,clear);
-			cls.index = this;
-			Object.defineProperty(this,"__metadata__",{value:{store:store,name:cls.name,prefix:""}});
+			let me = this,
+				store = new StorageType(cls.name,keyProperty,db,clear);
+			cls.index = me;
+			Object.defineProperty(this,"__metadata__",{value:{store:store,name:cls.name,prefix:"",commandQueue:new IndexCommandQueue(me)}});
 			if(!db.shared) {
 				this.__metadata__.prefix = cls.name + ".";
 			}
@@ -474,6 +519,9 @@ SOFTWARE.
 			});
 		}
 		async clear() {
+			this.__metadata__.commandQueue.add("clear",[]);
+		}
+		async clear() {
 			let index = this,
 				promises = [];
 			Object.keys(index).forEach((key) => {
@@ -482,6 +530,9 @@ SOFTWARE.
 			return new Promise((resolve,reject) => {
 				Promise.all(promises).then(() => { resolve(); });
 			});
+		}
+		async delete(id) {
+			this.__metadata__.commandQueue.add("delete",[id]);
 		}
 		async delete(id) {
 			let index = this,
@@ -541,7 +592,10 @@ SOFTWARE.
 				this[key] = false;
 			}
 		}
-		get(key,init=false) {
+		async get(key,init=false) {
+			this.__metadata__.commandQueue.add("get",[key,init]);
+		}
+		async get(key,init) {
 			let index = this,
 				value = index[key];
 			if(!value) {
@@ -573,6 +627,9 @@ SOFTWARE.
 			return Promise.resolve(value);
 		}
 		async instances(keyArray,cls) {
+			this.__metadata__.commandQueue.add("instances",[keyArray,cls]);
+		}
+		async instances(keyArray,cls) {
 			let index = this,
 				results = [];
 			for(var i=0;i<keyArray.length;i++) {
@@ -586,6 +643,9 @@ SOFTWARE.
 				}
 			}
 			return results;
+		}
+		async match(keyArray,pattern,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey,nestedClass) {
+			this.__metadata__.commandQueue.add("match",[keyArray,pattern,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey,nestedClass]);
 		}
 		async match(pattern,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey,nestedClass) {
 			let index = this,
@@ -800,6 +860,9 @@ SOFTWARE.
 			});
 		}
 		async put(object) {
+			this.__metadata__.commandQueue.add("put",[object]);
+		}
+		async put(object) {
 			let index = this,
 				store = index.__metadata__.store,
 				db = store.db(),
@@ -818,6 +881,9 @@ SOFTWARE.
 				}
 			}
 			return index.index(object,true,db.activate);
+		}
+		async index(object,reIndex,activate) {
+			this.__metadata__.commandQueue.add("index",[object,reIndex,activate]);
 		}
 		async index(object,reIndex,activate) {
 			let index = this,
@@ -976,6 +1042,9 @@ SOFTWARE.
 				}
 			});
 			return Promise.all(promises).catch((e) => { console.log(e); });
+		}
+		async save(key) {
+			this.__metadata__.commandQueue.add("save",[key]);
 		}
 		async save(key) {
 			let node = this[key],
