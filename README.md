@@ -1,8 +1,8 @@
 # reasondb
 
-A 100% native JavaScript browser or NodeJS database with a SQL like syntax (JOQULAR), JSON projections or live object result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, swapable persistence engines, built in statistical sampling, and automatic synchronization of object changes into the database and indexes in less than 60K.
+A 100% native JavaScript browser or NodeJS database with a SQL like syntax (JOQULAR), JSON projections or live object result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, swapable persistence engines, built in statistical sampling, and automatic synchronization of object changes into the database and indexes in as little as 70K.
 
-Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, and IronCache. Or, add your own favoriate store in just an hour (we timed ourselves for Redis and MemCached :-).
+Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, LevelUP, LocalForage, and IronCache. Or, add your own favoriate store in just an hour (we timed ourselves for Redis and MemCached :-).
 
 
 ## Installation
@@ -13,20 +13,21 @@ npm install reasondb
 
 ### Loading
 
-Users of Chrome 54.0 and greater can use the file at src/index.js so long as node-uuid is loaded first (57K): 
+Users of Chrome 54.0 and greater can use the file at src/index.js so long as node-uuid is loaded first (67K): 
 
 ```
 <script src="../node_modules/node-uuid/uuid.js"></script>
 <script src="../src/index.js"></script>
 ```
 
-A browserified version is located at browser/reasondb.js (185K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chome is almost twice as fast as either Firefox or Edge.
+A browserified version is located at browser/reasondb.js (203K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chome is almost twice as fast as either Firefox or Edge. **Note***: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the
+tests and examples are "decafinated" and print to the console rather than the browser page.
 
 ```
 <script src="../browser/reasondb.js"></script>
 ```
 
-NodeJS 6.x users can use a smaller babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (105K): 
+NodeJS 6.x users can use a smaller babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (124K): 
 
 ```
 require("index.js");
@@ -48,8 +49,8 @@ if(typeof(window)==="undefined") {
 
 // Create a database at the directory location provided using @key as the primary key on all objects.
 // Store data using localStorage. In the browser this is window.localStorage and the directory location is ignored.
-// On the server JSON files are created. The argument `true` forces the creation of new storage and indexes each 
-// time the example is run.
+// On the server JSON files are created in the directory. The argument `true` forces the creation of new storage 
+// and indexes each time the example is run.
 
 let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true);
 
@@ -138,7 +139,7 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>
 
 `<uniqueKeyName>` - The property to add to objects to uniquely identify them. Using anything other than "@key" has not been heavily tested at this point.
 
-`<storageType>` - The currently available storage types are:
+`<storageType>` - The currently available storage types are listed below. **Note***: For all storage types except MemStrore, LocalStore, and LocalForageStore you will need to install the associated npm packages for production. They are only listed as dev dependencies in the ReasonDB/package.json file. This keeps the primary ReasonDB code smaller.
 
 1) `ReasonDB.MemStore` provides a high-speed in memory database. `<nameOrPath>` is ignored.
 
@@ -146,18 +147,22 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>
 
 3) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
 
-4) `ReasonDB.IronCacheStore` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit
-package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. 
+4) `ReasonDB.IronCacheStore` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. Also,
+unit testing has occassional tests that fail due to timing interactions with the iron-cache server, i.e. key updates are not
+complete prior to a request for an updated key originating on the client. It is not clear what causes this, i.e. if the cause is
+in ReasonDB code or the iron-cache architecture.
 
 5) `ReasonDB.RedisStore` - Create your Redis client before creating the database and pass it in as a property `redisClient` in the options object, e.g. `{redisClient: <theClient>}`. `<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration, but Redis values do not expire unless an expiration is specifically set.  ***Note:*** To limit package dependencies, `redis` is a dev dependency not a package dependency. If you wish to use `redis` you should make it part of your app package. 
 
 6) `ReasonDB.MemcachedStore` - Create your Memcached client before creating the database and pass it in as a property `memcachedClient` in the options object, e.g. `{memcachedClient: <theClient>}`.`<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration.  ***Note:*** To limit package dependencies, `memjs` (the Memcached client) is a dev dependency not a package dependency. If you wish to use `memjs` you should make it part of your app package.
 
+7) `ReasonDB.LevelUPStore` - Open your LevelUP database before creating the ReasonDB database and pass it in as a property `levelUPClient` in the options object, e.g. `{levelUPClient: <theDatabase>}`.`<nameOrPath>` is ignored because the name of the database is tied to LevelUP creation.
+
 All storage types are referenced in the example and test files, you just need to provide client creation credentials and change the ReasonDB constructor call to test them out.
  
+With the exception of LevelUP all data stored in ReasonDB, including indexes, is human readable as JSON directly in the store.
+ 
 See ## Extending ReasonDB for how to add new storage types. 
-
-All data stored in ReasonDB, including indexes, is readable as JSON.
 
 `clear` - Clear storage when creating the database.
 
@@ -166,103 +171,6 @@ All data stored in ReasonDB, including indexes, is readable as JSON.
 `options` - See storage types above for the only current options, which are instantiated storage clients.
 
 ## JOQULAR - JavaScript Object QUery LAnguage Representation
-
-### Patterns
-
-Query patterns take the top level form: `{<classVariable>: {<property>: {<predicate>: <value> [,...]} [,...} [,...}`.
-
-`classVariable` refers to a variable created in a `from` clause, e.g. `{$o1: Object}` creates the variable `$o1`. Variables must start with a `$` sign.
-
-`predicate` can be any of the supported predicates, see Predicates below.
-
-Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age betwen 18 and 20 inclusive in the states of Ohio, Indiana, and Washington.
-
-### Insert
-
-`db.insert(<object>).into(<indexed class>)[.as(<class>)].exec().then(() => { <function body> })`. `then` is chainable as a Promise.
-
-Inserting an object into the database activates it such a way that any subsequent changes to the object automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store. Inserted objects have a unique v4 uuid as the value for thier key property. The name of the key property is provided when creating a database.
-
-### Delete
-
-`db.delete().from({<classVariable>: <class> [,...]}).where(<pattern>).exec().then((count) => { <function body> })`. `then` is chainable as a Promise. `count` is the number of objects deleted.
-
-The `from` clause is an object the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
-
-See Patterns above for a description of the `where` clause.
-
-Deleting an object from the database removes its unique key and removes it from its index and the persistent store.
-
-### Select
-
-`db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
-
-A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`, a retriever `get(index)`, and a computational method, `count`. It also has the data element `maxCount`. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided <projection>. All the methods are asynchronous and return Promises. 
-
-In order to optimize memory and speed, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the acutal number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count`.
-
-A `projection` specification takes the form `{<desiredPropertyName>: {<classVariable>: "<resultPropertyName"}[,...]}`.
-
-The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
-
-See ###Patterns above for a general description of the `where` clause.
-
-
-See the ##Cursor documentation for more details.
-
-### When - Streaming Analytics
-
-`db.when(<pattern>).from({<classVariable>: <class>[,...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
-
-Whenever `<pattern>` is matched based on new data being inserted or existing data being changed, the function specified in `then` will be invoked.
-
-#### Projections
-
-By default `select` clauses return a Promise which yields a cursor with rows represented by arrays of objects. By providing a projection, the row will be replaced with a single object that is a merger of data across the objects in the row.
-
-A `<projection>` takes the form `{<propertyName: {<classVariable: "<objectProperty>"}[,...]}`.
-
-For example `{e1name: {$e1: "name"},e2name: {$e2: "name"}}` will result in rows of the form `{e1name: "Joe",e2name: "Mary"}` assuming there are objects with the name "Joe" and "Mary" in database.
-
-
-#### Joins
-
-Select statements can join data from across classes in the `where` and `when` clauses. For example:
-
- `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$o: "name"}}})`
- 
- Or
- 
- `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$eeq: {$o: "name"}}}})`
- 
- At the present time, joins are only supported at the top level. They can't be used in nested query clauses. The below will not return any results:
- 
- `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$o: "name"}, birthday: {time: {$eeq: {$o: "time"}}}}})`
- 
- Additionally, join restrictions should be placed on the left side of the join. The below permutation of the first join above will not return expected results.
- 
-  `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$neq: null}}, $o: {name: {$p: "name}}})`.
-  
-  Only two way joins have been tested in the current release v1.0.
- 
-
-### Update
-
-`db.update({<classVariable>: <class>[,...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [,...]} [,...]}).where(<pattern>).exec()`
-
-For exampe: `db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}})` pairs Persons and adds partner names.
-
-
-### Direct Index Matching
-
-The indecies associated with each class can be accessed via a `.index` property on the class. Instance keys can be looked-up by using an asynchronous match method, e.g.
-
-`Person.index.match({name: {$eq: "Joe"}}).then((result) => {  })`
-
-The `result` is an array of ids associated with objects that match the pattern.
-
-`match(<pattern>).then((Array) => { })`
-
 
 ### Predicates
 
@@ -299,6 +207,110 @@ The `result` is an array of ids associated with objects that match the pattern.
 *$outside* - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match.
 
 See ##Extending ReasonDB to find out how to add your own predicates.
+
+### Patterns
+
+Query patterns take the top level form: `{<classVariable>: {<property>: {<predicate>: <value> [,...]} [,...} [,...}`.
+
+`classVariable` refers to a variable created in a `from` clause, e.g. `{$o1: Object}` creates the variable `$o1`. Variables must start with a `$` sign.
+
+`predicate` can be any of the supported predicates, see Predicates below.
+
+Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age betwen 18 and 20 inclusive in the states of Ohio, Indiana, and Washington.
+
+### Insert
+
+`db.insert(<object>,...).into(<indexed class>)[.as(<class>)].exec().then(() => { <function body> })`. `then` is chainable as a Promise.
+
+Inserting objects into the database activates them such a way that any subsequent changes to the objects automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store. Inserted objects have a unique v4 uuid as the value for thier key property. The name of the key property is provided when creating a database.
+
+### Delete
+
+`db.delete().from({<classVariable>: <class> [,...]}).where(<pattern>).exec().then((count) => { <function body> })`. `then` is chainable as a Promise. `count` is the number of objects deleted.
+
+The `from` clause is an object the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
+
+See Patterns above for a description of the `where` clause.
+
+Deleting an object from the database removes its unique key and removes it from its index and the persistent store.
+
+### Select
+
+`db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
+
+A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`, a retriever `get(index)`, and a computational method, `count`. It also has the data element `maxCount`. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided <projection>. All the methods are asynchronous and return Promises. 
+
+In order to optimize memory and speed, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the acutal number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count`.
+
+A `projection` specification takes the form `{<desiredPropertyName>: {<classVariable>: "<resultPropertyName"}[,...]}`.
+
+The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
+
+See ###Patterns above for a general description of the `where` clause.
+
+See the ##Cursor documentation for more details.
+
+### When - Streaming Analytics
+
+`db.when(<pattern>).from({<classVariable>: <class>[,...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
+
+Whenever `<pattern>` is matched based on new data being inserted or existing data being changed, the function specified in `then` will be invoked.
+
+#### Projections
+
+By default `select` clauses return a Promise which yields a cursor with rows represented by arrays of objects. By providing a projection, the row will be replaced with a single object that is a merger of data across the objects in the row.
+
+A `<projection>` takes the form `{<propertyName: {<classVariable: "<objectProperty>"}[,...]}`.
+
+For example `{e1name: {$e1: "name"},e2name: {$e2: "name"}}` will result in rows of the form `{e1name: "Joe",e2name: "Mary"}` assuming there are objects with the name "Joe" and "Mary" in database.
+
+
+#### Joins
+
+Select statements can join data from across classes in the `where` and `when` clauses. For example:
+
+ `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$o: "name"}}})`
+ 
+ Or
+ 
+ `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$eeq: {$o: "name"}}}})`
+ 
+ At the present time, joins are only supported at the top level. They can't be used in nested query clauses. The below will not return any results:
+ 
+ `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$o: "name"}, birthday: {time: {$eeq: {$o: "time"}}}}})`
+ 
+ Additionally, join restrictions should be placed on the left side of the join. The below permutation of the first join above will not return expected results.
+ 
+  `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$neq: null}}, $o: {name: {$p: "name}}})`.
+  
+  Only two way joins have been tested in the current release v1.x.
+ 
+
+### Update
+
+`db.update({<classVariable>: <class>[,...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [,...]} [,...]}).where(<pattern>).exec()`
+
+For exampe: `db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}})` pairs Persons and adds partner names.
+
+
+### Direct Index Use
+
+The indecies associated with each class can be accessed via a `.index` property on the class. Instance keys can be looked-up by using an asynchronous match method, e.g.
+
+`Person.index.match({name: {$eq: "Joe"}}).then((result) => {  })`
+
+The `result` is an array of ids associated with objects that match the pattern.
+
+`<class>.index.match(<pattern>).then((array) => { })`
+
+The return keys can be resolved all at once with a call to `.instances`, e.g.:
+
+`<class>.index.match(<pattern>).then((keyArray) => { <class>.index.instances(keyArray).then((objectArray) => { }); })`
+
+Alternatively, objects can be retrieved with `.get`, e.g.
+
+`<class>.index.get(uniqeKey).then((object) => { })`
+
 
 ### Array Matching
 
@@ -355,32 +367,35 @@ class <StoreName> extends Store {
 			// Save data to the this.__metadata__ object, NOT the store itself!
 			// If you need config options, then add them to the top level database instance and access them from the db argument.
 		}
+	// lets the ReasonDB engine know if classnames can be used to split storage for efficiency by not sharing. This will usually be false.
+	static get split() { return false; };
 	async clear() {
 		// Clear all data from the store and return true if successful, false if not.
+		// The superclass does nto provide any methods to do this. It must be implemented by the child.
 	}
 	async delete(key) {
-		// Delete the data associated with the key and return true if successful, false if not.
+		// Delete promise the data associated with the key and resolve to true if successful, false if not.
+		return super.delete(key,() => new Promise((resolve,reject) => { <insert code here> resolve(true); })) 
 	}
 	async get(key) {
-		// Return the data associated with the key and undefined if the key does not exists.
-		// If your data is class based, then instantiate the class using the data returned if
-		// the underlying engine does not already do this. The async ultility method super.restore 
-		// may work for you if your keys are of the form <className>@<unique id>, await super.restore(data).
-		// This will load embedded object references.
+		// Return the data associated with the key as an object and undefined if the key does not exists.
+		// The superclass will handle resolving referencs to other classes.
+		return super.get(key,() => new Promise((resolve,reject) => { < insert code here> resolve(object); }));
 	}
-	async set(key,value) {
+	async set(key,value,normalize) {
 		// Set the data associated with the key and return true if successful, false if not.
-		// If the value potentially contains references to other objects and you are using keys of the form
-		// <className>@<unique id>, you may be able to use super.normalize(value).
+		// The superclass will normalize the object if it contains references to other objects and ensure they are also persisted by
+		// calling back down to the child.
+		return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => { < insert code here > resolve(true); }));
 	}
 	async restore(json) {
 		// An optional utility method that should return an instantiated class including instantiated
-		// references to other objects.
+		// references to other objects. The superclass already provides this; but it can be overridden.
 	}
 	normalize(instance) {
 		// An optional utility method to convert the instance into plain JSON with embedded references 
 		// to other objects using their keys. Depending on your situation, you may need to make this 
-		// asynchronous and use it so save embedded objects.
+		// asynchronous and use it so save embedded objects. The superclass already provides this; but it can be overridden.
 	}
 }
 ```
@@ -393,7 +408,7 @@ ReasonDB was designed to:
 
 1) Be 100% JavaScript.
 
-2) Leverage the massive number of hours that have gone into optimizing object access by Mozilla and Google. See [Indexing With JavaScript Objects, Millions Of Ops/Second](http://anywhichway.github.io/indexing.html).
+2) Leverage the massive number of hours that have gone into optimizing object property access by Mozilla and Google. See [Indexing With JavaScript Objects, Millions Of Ops/Second](http://anywhichway.github.io/indexing.html).
 
 3) Be extensible from a command, predicate, and persistence store perspective.
 
@@ -401,7 +416,7 @@ ReasonDB was designed to:
 
 5) Minimize memory usage by large result sets.
 
-6) Simplify initial development by eliminating the need to make decisions about indexing and updating the database. (Don't worry, scaling back indexes or eliminating auto-updates are straight-forward to implement and should show up in v2.0).
+6) Simplify initial development by eliminating the need to make decisions about indexing and updating the database. (Scaling back indexes or eliminating auto-updates are straight-forward to implement and should show up in v2.0).
 
 ### Indexes & Data Storage
 
@@ -458,10 +473,18 @@ Building, testing and quality assessment are conducted using Travis, Mocha, Chai
 
 For code quality assessment purposes, the cyclomatic complexity threshold is set to 10.
 
+The unit tests and examples can be run on the server in NodeJS by executing just the index.js files in the relevant directories.
+
 ## Notes
+
+The codebase is currently light on error handling and test coverage is only at 30%.
 
 
 ## Updates (reverse chronological order)
+
+2016-11-13 v0.1.4 Further optimizations to ensure action sequencing is correct when using a remote datastore. This fixed issues with Redis. Simplified coding to add new persistence stores.
+
+2016-11-02 v0.1.3 Optimizations to help ensure all the actions required to support one change to a data element are complete prior to initiating another on the same element. This involved replacing Promise calls is functions with a passed reference to the resolver for a top level Promise. Added support for multiple arguments for `insert`, `delete`. Added LevelUpStore. Identified an fixed a couple of edge case Promises that contained `this` references. Corrected a join issue that resulted in right sides that were unrestricted for Redis and Memcache was corrected.
 
 2016-10-31 v0.1.2 1.1 was pushed with incorrect test case config.
 

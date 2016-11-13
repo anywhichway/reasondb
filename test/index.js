@@ -3,23 +3,16 @@ var chai,
 	ReasonDB,
 	IronCacheClient,
 	RedisClient,
-	MemJSClient;
+	MemJSClient,
+	LevelUPClient;
 if(typeof(window)==="undefined") {
 	chai = require("chai");
 	expect = chai.expect;
-	//Promise = require("bluebird");
+	Promise = require("bluebird");
+	Promise.longStackTraces();
 	ReasonDB = require("../lib/index.js");
-	//IronCacheClient = require("iron-cache").createClient({"project":"","token":""});
-	//RedisClient = require("redis").createClient(,"",{no_ready_check: true});
-	//RedisClient.auth("",function(err) {
-	//	if(err) {
-	//		console.log(err);
-	//	}
-	//});
-	//RedisClient.on("connect", function() {
-	//    console.log('Connected to Redis');
-	//});
-	//MemJSClient = require("memjs").Client.create("",{username: "", password:""});
+	let levelup = require("levelup");
+	LevelUPClient = levelup; //("./examples/basic/db");
 }
 
 function decaf() {
@@ -49,7 +42,7 @@ if(store===ReasonDB.LocalForageStore || typeof(window)==="undefined") {
 }
 	
 
-let db = new ReasonDB("./test/db","@key",store,clear,activate,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient}),
+let db = new ReasonDB("./test/db","@key",store,clear,activate,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient,levelUPClient:LevelUPClient}),
 	i = Object.index,
 		promises = [],
 		resolver,
@@ -59,15 +52,39 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{ironCacheClient:I
 		o1 = {name: "Joe", age:function() { return 24; }, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
 		p1= {name:"Mary",age:21,children:[1,2,3],};
 	if(clear) {
+		["Array","Date","Object","Pattern"].forEach((name) => {
+			if(store==ReasonDB.RedisStore) {
+				RedisClient.hkeys(name,(err, values) => {
+					if (err) {
+						console.log("cleared err ",name,err,value)
+					} else {
+						if(values.length===0) {
+							console.log("cleared empty ",name,err,values)
+						} else {
+							let multi = RedisClient.multi();
+							values.forEach((id) => {
+								multi = multi.hdel(name, id, function(err, res) {
+									;
+								})
+							});
+							multi.exec((err,replies) => {
+								console.log("cleared ",name,err,values)
+							});
+						}
+					}
+				})
+			}
+		});
 		let a1 = {city:"Seattle",zipcode:{base:98101,plus4:1234}},
 			p2 = {wife:p1,name:"Joe",age:24,address:a1},
-			p3 = {name:"Mary",birthday:new Date(1962,0,15)};
-			//promises = [i.put(o1),i.put(p2),i.put(p1),i.put(p3)];
-			//promises = [i.put(o1),i.put(p2)];
-			i.put(o1).then(() => { 
-				i.put(p2).then(() => { 
-					i.put(p1).then(() => { 
-						i.put(p3).then(() => { resolver(); })})})});
+			p3 = {name:"Mary",birthday:new Date(1962,0,15)},
+			activity = new ReasonDB.Activity(resolver);
+		activity.step(() => i.put(o1));
+		activity.step(() => i.put(p2));
+		activity.step(() => i.put(p1));
+		activity.step(() => i.put(p3));
+		activity.step(resolver);
+		activity.exec();
 	} else {
 		resolver();
 	}
@@ -126,9 +143,9 @@ promise.then((results) => {
 					});
 				});
 			});
-			setTimeout(() => { // due to delays in restoring objects and variable promise sequencing, this test fails and breaks other tests under IronCache unless it is forced to run "last"
-				it('{name: {$eq: "Joe"}}',function(done) {
-					i.match({name: {$eq: "Joe"}}).then((result) => {
+			it('flush {name: {$eq: "Joe"}} and reload',function(done) {
+				i.match({name: {$eq: "Joe"}}).then((result) => {
+					setTimeout(() => { // due to delays in restoring objects and variable promise sequencing, this test fails and breaks other tests under IronCache unless it is forced to run "last"
 						result.forEach((key) => {
 							i.flush(key);
 						});
@@ -141,10 +158,10 @@ promise.then((results) => {
 								return object.name==="Joe"; 
 							})).to.equal(true);
 							done();
-						})
-					});
+						});
+					},1000);
 				});
-			},1000);
+			});
 			it('{name: {$neq: "Joe"}}',function(done) {
 				i.match({name: {$neq: "Joe"}}).then((result) => {
 					expect(result.length).to.equal(2);
@@ -205,14 +222,14 @@ promise.then((results) => {
 					done();
 				});
 			});
-			it('match: {date:15}', function(done) {
-				Date.index.match({date:15}).then((result) => {
+			it('match: {$class: "Date", date:15}', function(done) {
+				i.match({$class: "Date", date:15}).then((result) => {
 					expect(result.length).to.equal(2);
 					done();
 				});
 			});
-			it('match: {1:2}', function(done) {
-				Array.index.match({1:2}).then((result) => {
+			it('match: {$class: "Array", 1:2}', function(done) {
+				i.match({$class: "Array", 1:2}).then((result) => {
 					expect(result.length).to.equal(1);
 					done();
 				});
@@ -402,94 +419,102 @@ promise.then((results) => {
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: {$e2: "name"}}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					cursor.count().then((cnt) => {
-						expect(cnt).to.equal(8);
-						cursor.every((row) => {
-							return row[0].name!==row[1].name;
-						}).then((result) => {
-							expect(result).to.equal(true);
-							done();
-						}); 
-					 }); 
-				});
+					let count = 0;
+					expect(cursor.maxCount>=8).to.equal(true);
+					cursor.every((row) => {
+						count++;
+						return row[0].name!==row[1].name;
+					}).then((result) => {
+						expect(result).to.equal(true);
+						expect(count).to.equal(8);
+						done();
+					}).catch((e) => {
+						console.log(e)
+					}); 
+				 }); 
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					cursor.count().then((cnt) => {
-						expect(cnt).to.equal(8);
-						cursor.every((row) => {
-							return row[0].name===row[1].name;
-						}).then((result) => {
-							expect(result).to.equal(true);
-							done();
-						});  
-					 }); 
+					let count = 0;
+					expect(cursor.maxCount>=8).to.equal(true);
+					cursor.every((row) => {
+						count++;
+						return row[0].name===row[1].name;
+					}).then((result) => {
+						expect(result).to.equal(true);
+						done();
+					});  
 				});
 			});
 			it('db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
 				db.select().from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					cursor.count().then((cnt) => {
-						expect(cnt).to.equal(8);
-						cursor.every((row) => {
-							return row[0].name!==row[1].name;
-						}).then((result) => {
-							expect(result).to.equal(true);
-							done();
-						});  
-					 }); 
+					let count = 0;
+					expect(cursor.maxCount>=8).to.equal(true);
+					cursor.every((row) => {
+						count++
+						return row[0].name!==row[1].name;
+					}).then((result) => {
+						expect(result).to.equal(true);
+						expect(count).to.equal(8);
+						done();
+					});  
 				});
 			});
 			it('db.select().first(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
 				db.select().first(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					cursor.count().then((cnt) => {
-						expect(cnt).to.equal(4);
-						cursor.every((row) => {
-							return row[0].name!==row[1].name;
-						}).then((result) => {
-							expect(result).to.equal(true);
-							done();
-						});  
-					 }); 
+					let count = 0;
+					expect(cursor.maxCount>=4).to.equal(true);
+					cursor.every((row) => {
+						count++;
+						return row[0].name!==row[1].name;
+					}).then((result) => {
+						expect(result).to.equal(true);
+						expect(count).to.equal(4);
+						done();
+					});   
 				});
 			});
 			it('db.select().random(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
 				db.select().random(4).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					cursor.count().then((cnt) => {
-						expect(cnt).to.equal(4);
-						cursor.every((row) => {
-							return row[0].name!==row[1].name;
-						}).then((result) => {
-							expect(result).to.equal(true);
-							done();
-						});  
-					 }); 
+					let count = 0;
+					expect(cursor.maxCount>=4).to.equal(true);
+					cursor.every((row) => {
+						count++;
+						return row[0].name!==row[1].name;
+					}).then((result) => {
+						expect(result).to.equal(true);
+						expect(count).to.equal(4);
+						done();
+					});  
 				});
 			});
 			it('db.select().sample(.2,.05).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}})', function(done) {
 				db.select().sample(.2,.05).from({$e1: Object,$e2: Object}).where({$e1: {name: {$: (v) => { return v!=null; }, $neq: {$e2: "name"}}}}).exec().then((cursor) => { 
-					cursor.count().then((cnt) => {
-						expect(cnt).to.equal(4);
-						cursor.every((row) => {
-							return row[0].name!==row[1].name;
-						}).then((result) => {
-							expect(result).to.equal(true);
-							done();
-						});  
-					 }); 
+					let count = 0;
+					expect(cursor.maxCount>=4).to.equal(true);
+					cursor.every((row) => {
+						count++;
+						return row[0].name!==row[1].name;
+					}).then((result) => {
+						expect(result).to.equal(true);
+						expect(count).to.equal(4);
+						done();
+					});  
 				});
 			});
 			it('db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$eq: {$e2: "name"}}}, $e2: {name: "Mary"}})', function(done) {
-				db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}, $e2: {name: "Mary"}})
+				return db.select({e1name: {$e1: "name"},e2name: {$e2: "name"}}).from({$e1: Object,$e2: Object}).where({$e1: {name: {$neq: null, $eq: {$e2: "name"}}}, $e2: {name: "Mary"}})
 				.exec().then(function(cursor) {
-					cursor.count().then((cnt) => {
-						expect(cnt>0).to.equal(true);
-						cursor.every((row) => {
-							return row.e1name==="Mary" && row.e2name==="Mary"; 
-						}).then((result) => {
-							expect(result).to.equal(true);
-							done();
-						}); 
-					 }); 
+					let count = 0;
+					expect(cursor.maxCount>=4).to.equal(true);
+					cursor.every((row) => {
+						count++;
+						return row.e1name==="Mary" && row.e2name==="Mary"; 
+					}).then((result) => {
+						expect(result).to.equal(true);
+						expect(count>0).to.equal(true);
+						done();
+					}); 
 				});
 			});
 			/*NOT YET SUPPORTED it('query select({name: {$o: "name"}}).from({$o: Object}).where({$o: {name: "Joe"}}).orderBy({$o1: {name: "asc"}})', function(done) {

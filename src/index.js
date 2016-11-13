@@ -51,6 +51,113 @@ SOFTWARE.
 		}
 		return;
 	}*/
+	
+	function wait(object,property,ms=1000,count=1,test) {
+		let promises, promise;
+		if(!test) {
+			test = function(value) {
+				if(value!==test.value) {
+					return true;
+				}
+			}
+			test.value = object[property];
+		}
+		if(wait.promised[property]) {
+			promises = wait.promised[property].get(object);
+			if(promises) {
+				promise = promises.get(test);
+				if(promise) {
+					return promise;
+				}
+			} else {
+				promises = new Map();
+				wait.promised[property].set(object,promises);
+			}
+		} else {
+			wait.promised[property] = new Map();
+			promises = new Map();
+			wait.promised[property].set(object,promises);
+		}
+		promise = new Promise((resolve,reject) => {
+			let waiter = (() => {
+				let value = object[property];
+				if(test(value)) {
+					wait.promised[property].delete(object);
+					if(wait.promised[property].size===0) {
+						delete wait.promised[property];
+					}
+					resolve(value);
+				} else if(count>0) {
+					count--;
+					setTimeout(waiter,ms);
+				} else {
+					resolve();
+				}
+			})
+			waiter();
+		});
+		promises.set(test,promise);
+		return promise;
+	}
+	wait.promised = {};
+	
+	class Activity {
+		constructor(abort=(()=>{})) {
+			let me = this;
+			this.steps = [];
+			this.results = [];
+			this.abort = (result) => { me.aborted=true; abort(result); };
+		}
+		exec(i=0,value) {
+			if(this.aborted) { return; }
+			let me = this,
+				step = me.steps[i],
+				steps = (Array.isArray(step) ? step : [step]);
+			steps.every((step) => {
+				if(!step) {
+					console.log("WARNING: undefined Activity step");
+					return;
+				}
+				if(step instanceof Promise || (step.constructor.name==="Promise" && typeof(step.then)==="function")) {
+					step.then((result) => {
+						return me.complete(i,result);
+					});
+					return false;
+				} else {
+					let result = step(value,me.abort);
+					if(result instanceof Promise || (result && result.constructor.name==="Promise" && typeof(result.then)==="function")) {
+						result.then((result) => {
+							return me.complete(i,result);
+						});
+						return false;
+					}
+					me.complete(i,result);
+					return true;
+				}
+			});	
+		}
+		reset() {
+			this.results = [];
+		}
+		step(f) {
+			if(f) {
+				this.steps.push(f);
+			}
+			//if(this.steps.length===this.results.length+1) {
+			//	this.exec(this.steps.length-1,this.results[this.results.length-1]);
+			//}
+			return this;
+		}
+		complete(i,result) {
+			let me = this;
+			//if(i===me.results.length) {
+				if(i<me.steps.length-1) {
+					me.results[i] = result;
+					me.exec(i+1,result)
+				}
+			//}
+		}
+	}
 
 	Array.indexKeys = ["length","$max","$min","$avg","*"];
 	Array.reindexCalls = ["push","pop","splice","reverse","fill","shift","unshift"];
@@ -99,8 +206,8 @@ SOFTWARE.
 		if(key.indexOf("get")===0) {
 			let name = (key.indexOf("UTC")>=0 ? key.slice(3) : key.charAt(3).toLowerCase() + key.slice(4)),
 				setkey = "set" + key.slice(3),
-				get = Function("return function() { return this." + key + "(); }")(),
-				set = Function("return function(value) { " + (Date.prototype[setkey] ? "return this." + setkey + "(value); " : "") + "}")();
+				get = function() { return this[key](); },
+				set = function(value) { if(Date.prototype[setKey]) { Date.prototype[setKey].call(this,value); } return true; }
 			Object.defineProperty(Date.prototype,name,{enumerable:false,configurable:true,get:get,set:set});
 			Date.indexKeys.push(name);
 			if(Date.prototype[setkey]) {
@@ -350,28 +457,38 @@ SOFTWARE.
 							let result;
 							if(me.projection) {
 								result = {};
-								Object.keys(me.projection).forEach((property) => {
+								if(!Object.keys(me.projection).every((property) => {
 									let colspec = me.projection[property];
 									if(colspec && typeof(colspec)==="object") {
 										let classVar = Object.keys(colspec)[0],
 											key = colspec[classVar],
 											col = me.classVarMap[classVar];
-										result[property] = instances[col][key];		
+										if(instances[col]) {
+											result[property] = instances[col][key];
+											return true;
+										}
 									}
-								});
+								})) {
+									resolve();
+								}
 							} else {
 								result = [];
-								instances.forEach((instance) => {
-									result.push(instance);
-								})
+								if(!instances.every((instance) => {
+									if(instance) {
+										result.push(instance);
+										return true;
+									}
+								})) {
+									resolve();
+								}
 							}
 							resolve(result);
 						});
 					} else {
-						resolve(undefined);
+						resolve();
 					}
 				} else {
-					resolve(undefined);
+					resolve();
 				}
 			});	
 		}
@@ -421,59 +538,15 @@ SOFTWARE.
 			}
 		});
 	}
-	
-	 
-	 class IndexCommandQueue {
-	 	 constructor(target) {
-		 	let me  = this;
-		 	me.queue = [];
-		 	me.target = target;
-		 }
-	 	 add(method,args) {
-	 		 let me = this,
-	 		 	deferred = {},
-	 		 	promise = new Promise((resolve,reject) => { deferred.resolve = resolve; deferred.reject = reject; });
-	 		 me.queue.push({method:method,arguments:args,promise:deferred});
-	 		 if(me.queue.length===1) {
-	 			 setTimeout(me.next());
-	 		 }
-	 		 return promise;
-	 	 }
-		 next() {
-	 	  let me = this,
-	 		action = me.queue.shift(),
-	 		result = me.target["_"+action.method](...action.arguments);
-	 		if(action.method==="delete") {
-	 			while(me.queue.length>0 && me.queue[0].method!=="put") {
-	 				me.queue.shift();
-	 			}
-	 		}
-	 		if(result instanceof Promise) {
-	 			result.then((result) => {
-	 				action.promise.resolve(result);
-	 				if(me.queue.length>0) {
-	 					me.next();
-	 				}
-	 			});
-	 		} else {
-	 			action.promise.resolve(result);
-	 			if(me.queue.length>0) {
-	 				me.next();
-	 			}
-	 		}
-	 	}
-	 }
-	 
 	 
 	class Index {
 		constructor(cls,keyProperty="@key",db,StorageType=(db ? db.storageType : MemStore),clear=(db ? db.clear : false)) {
-			let me = this,
-				store = new StorageType(cls.name,keyProperty,db,clear);
+			let me = this;
 			cls.index = me;
-			Object.defineProperty(this,"__metadata__",{value:{store:store,name:cls.name,prefix:"",commandQueue:new IndexCommandQueue(me)}});
-			if(!db.shared) {
-				this.__metadata__.prefix = cls.name + ".";
-			}
+			me.keys = {};
+			me.store = new StorageType(cls.name,keyProperty,db,clear);
+			me.name = cls.name;
+			me.pending = {};
 		}
 		static coerce(value,type) {
 			let conversions = {
@@ -515,11 +588,13 @@ SOFTWARE.
 				indexkeys = Object.keys(object);
 			}
 			return indexkeys.filter((key) => {
-				return key!=="*"; //typeof(object[key])!=="function" && 
+				return key!=="*";
 			});
 		}
-		async clear() {
-			this.__metadata__.commandQueue.add("clear",[]);
+		isInstanceKey(key) {
+			if(key.indexOf(this.name+"@")===0) {
+				return true;
+			}
 		}
 		async clear() {
 			let index = this,
@@ -532,124 +607,312 @@ SOFTWARE.
 			});
 		}
 		async delete(id) {
-			this.__metadata__.commandQueue.add("delete",[id]);
-		}
-		async delete(id) {
 			let index = this,
-				store = index.__metadata__.store,
-				keyProperty = store.__metadata__.keyProperty;
-			return new Promise((resolve,reject) => {
-				index.get(id).then((object) => { 
-					let promises = [];
-					promises.push(store.delete(id,true));
-					Index.keys(object).forEach((key) => {
-						promises.push(new Promise((resolve,reject) => {
-							index.get(key).then((node) => {
-								if(!node) { 
-									resolve();
-									return;
-								}
-								let value = object[key],
-									type = typeof(value);
-								if(type==="object") {
-									if(!value) {
-										if(node.null) {
-											delete node.null[id];
+				store = index.store,
+				keyProperty = store.keyProperty,
+				pending = index.pending[id];
+			function doit() {
+				 return new Promise((resolve,reject) => {
+					index.get(id,(object) => { 
+						let promises = [];
+						promises.push(store.delete(id,true).catch((e) => { console.log(e); }));
+						if(object) {
+							Index.keys(object).forEach((key) => {
+								promises.push(new Promise((resolve,reject) => {
+									index.get(key,(node) => {
+										if(!node) { 
+											resolve();
+											return;
 										}
-									} else if(value[keyProperty]) {
-										let idvalue = value[keyProperty];
-										if(node[idvalue][type] && node[idvalue][type][id]) {
-											delete node[idvalue][type][id];
+										let value = object[key],
+											type = typeof(value);
+										if(type==="object") {
+											if(!value) {
+												if(node.null) {
+													delete node.null[id];
+												}
+											} else if(value[keyProperty]) {
+												let idvalue = value[keyProperty];
+												if(node[idvalue][type] && node[idvalue][type][id]) {
+													delete node[idvalue][type][id];
+												}
+											}
+											index.save(key,()=>{ resolve(true); }).catch((e) => { console.log(e); });;
+										} else if(type!=="undefined") {
+											if(!node[value] || !node[value][type] || !node[value][type][id]) {
+												resolve();
+												return;
+											}
+											delete node[value][type][id];
+											index.save(key).then(()=>{ resolve(true); }).catch((e) => { console.log(e); });
 										}
-									}
-									index.save(key).then(() => {
-										resolve(true);
 									});
-								} else if(type!=="undefined") {
-									if(!node[value] || !node[value][type] || !node[value][type][id]) {
-										resolve();
-										return;
-									}
-									delete node[value][type][id];
-									index.save(key).then(() => {
-										resolve();
-									});
-								}
+								}).catch((e) => { console.log(e); }));
 							});
-						}));
-					});
-					Promise.all(promises).then(() => {
-						delete object[keyProperty];
-						delete index[id];
-						resolve(id);
+						}
+						Promise.all(promises).then(() => {
+							if(object) {
+								delete object[keyProperty];
+							}
+							delete index.keys[id];
+							resolve();
+						}).catch((e) => {
+							console.log(e);
+						});
+					}).catch((e) => {
+						console.log(e);
 					});
 				});
-			});
-		}
-		flush(key) {
-			let desc = Object.getOwnPropertyDescriptor(this,key);
-			if(desc) {
-				this[key] = false;
 			}
-		}
-		async get(key,init=false) {
-			this.__metadata__.commandQueue.add("get",[key,init]);
-		}
-		async get(key,init) {
-			let index = this,
-				value = index[key];
-			if(!value) {
-				let empty = {};
-				if(init) {
-					value = index[key] = empty;
-				}
+			if(pending) {
 				return new Promise((resolve,reject) => {
-					let metadata = index.__metadata__;
-					metadata.store.get(key.indexOf(metadata.name+"@")===0 ? key : metadata.prefix+key).then((storedvalue) => {
-						if(typeof(storedvalue)!=="undefined") {
-							let store = index.__metadata__.store,
-								db = store.db();
-							if(index[key]===empty || !index[key]) { // another async may have already loaded the object
-								value = index[key] = storedvalue;
-								index.index(value,false,db.activate).then(() => {
-									resolve(value);
-								});
-								resolve(value);
-							} else {
-								resolve(index[key]);
-							}
-						} else {
-							resolve(value);
+					pending.then((result) => {
+						if(typeof(result)!=="undefined") {
+							let pending = doit();
+							index.pending[id] = pending;
+							pending.then(() => {
+								//console.log("deleted")
+								resolve(true);
+							});
 						}
 					});
 				});
+			} else {
+				pending = index.pending[id] = doit();
+				return new Promise((resolve,reject) => {
+					pending.then((result) => {
+						delete index.pending[id];
+						resolve(true);
+					});
+				});
+			}
+		}
+		flush(key) {
+			let index = this,
+				indexkey = (this.isInstanceKey(key) ? key : index.name + "." + key),
+				desc = Object.getOwnPropertyDescriptor(this.keys,indexkey);
+			if(desc) {
+				this.keys[key] = false;
+			}
+		}
+		async get(key,f,init) {
+			let index = this,
+				indexkey = (this.isInstanceKey(key) ? key : index.name + "." + key),
+				value = index.keys[indexkey],
+				promise = index.pending[key];
+			if(promise) {
+				return promise;
+			}
+			if(!value) {
+				if(init) {
+					value = index.keys[indexkey] = {};
+				}
+				let resolver,
+					rejector;
+				promise = index.pending[key] = new Promise((resolve,reject) => { resolver = resolve; rejector = reject; });
+				let activity = new Activity(resolver)
+					.step(() => index.store.get(indexkey))
+					.step((storedvalue,abort) => {
+						delete index.pending[key];
+						let type = typeof(storedvalue);
+						if(type==="undefined") {
+							if(init) {
+								value = index.keys[indexkey] = {};
+							}
+						} else {
+							value = index.keys[indexkey] = storedvalue;
+							if(type==="object" && index.isInstanceKey(key)) {
+								return index.index(value,false,index.store.db.activate);
+							}
+						}
+						return value;
+					})
+					.step(f)
+					.step(resolver)
+					.exec();
+				return promise;
+			}
+			if(f) {
+				f(value);
 			}
 			return Promise.resolve(value);
 		}
-		async instances(keyArray,cls) {
-			this.__metadata__.commandQueue.add("instances",[keyArray,cls]);
+		async index(object,reIndex,activate) {
+			let index = this,
+				store = index.store,
+				cls = object.constructor,
+				id = object[store.keyProperty],
+				resolver,
+				rejector,
+				promise = new Promise((resolve,reject) => { resolver = resolve; rejector = reject; });
+			index.keys[id] = object;
+			if(object.constructor.reindexCalls) {
+				object.constructor.reindexCalls.forEach((fname) => {
+					let f = object[fname];
+					if(!f.reindexer) {
+						Object.defineProperty(object,fname,{configurable:true,writable:true,value:function() {
+							let me = this;
+							f.call(me,...arguments);
+							index.index(me,true,db.activate).then(() => {
+								stream(me,db);
+							});
+						}});
+						object[fname].reindexer = true;
+					}
+				});
+			}
+			let indexed = (reIndex ? store.set(id,object,true) : Promise.resolve());
+			indexed.then(() => {
+				let activity = new Activity(resolver);
+				Index.keys(object).forEach((key) => {
+					let value = object[key],
+						desc = Object.getOwnPropertyDescriptor(object,key);
+					function get() {
+						return get.value;
+					}
+					if(!reIndex) {
+						get.value = value;
+					}
+					function set(value,first) {
+						let instance = this,
+							cls = instance.constructor,
+							index = cls.index,
+							store = index.store,
+							indexkey = cls.name + "." + key,
+							keyProperty = store.keyProperty,
+							db = store.db,
+							id = instance[keyProperty],
+							oldvalue = get.value,
+							oldtype = typeof(oldvalue),
+							type = typeof(value);
+						if(oldtype==="undefined" || oldvalue!=value) {
+							if(type==="undefined") {
+								delete get.value;
+							} else {
+								get.value = value;
+							}
+							if(type==="function") {
+								value = value.call(instance);
+								type = typeof(value);
+							}
+							return new Promise((resolve,reject) => {
+									index.get(key,(node) => {
+										node = index.keys[indexkey]; // re-assign since 1) we know it is loaded and initialized, 2) it may have been overwritten by another async
+										if(!instance[keyProperty]) { // object may have been deleted by another async call!
+											if(node[oldvalue] && node[oldvalue][oldtype]) {
+												delete node[oldvalue][oldtype][id];
+											}
+											resolve(true);
+											return;
+										} 
+										if(value && type==="object") {
+											let ocls = value.constructor;
+											if(!ocls.index) {
+												db.index(ocls);
+											}
+											ocls.index.put(value).then(() => {
+												let okey = value[keyProperty],
+													otype = value.constructor.name;
+												if(!node[okey]) {
+													node[okey] = {};
+												}
+												if(!node[okey][otype]) {
+													node[okey][otype] = {};
+												}
+												node[okey][otype][id] = true;
+												let restorable = false;
+												if(node[oldvalue] && node[oldvalue][oldtype]) {
+													delete node[oldvalue][oldtype][id];
+													restorable = true;
+												}
+												// chaing then. get rid of promises
+												let promise = (first ? Promise.resolve() : store.set(id,instance,true));
+												promise.then(() => { 
+													index.save(key,() => { 
+														resolve(true);
+														if(!first) {
+															stream(object,db);
+														}
+													}).catch((e) => {
+														throw(e);
+													});
+												}).catch((e) => {
+													delete node[okey][otype][id];
+													if(restorable) {
+														node[oldvalue][oldtype][id] = true;
+													}
+												});;
+												
+											});
+										} else if(type!=="undefined") {
+											if(!node[value]) {
+												node[value] = {};
+											}
+											if(!node[value][type]) {
+												node[value][type] = {};
+											}
+											node[value][type][id] = true;
+											let restorable = false;
+											if(node[oldvalue] && node[oldvalue][oldtype]) {
+												delete node[oldvalue][oldtype][id];
+												restorable = true;
+											}
+											let promise = (first ? Promise.resolve() : store.set(id,instance,true));
+											promise.then(() => { 
+												index.keys[key] = node;
+												index.store.set(index.name + "." + key,node).then(() => {
+													resolve(true);
+													if(!first) {
+														stream(object,db);
+													}
+												});
+											}).catch((e) => {
+												delete node[value][type][id];
+												if(restorable) {
+													node[oldvalue][oldtype][id] = true;
+												}
+											});
+										}
+									},true);
+							});
+						} else {
+							return Promise.resolve(true);
+						}
+					}
+					let writable = desc && !!desc.configurable && !!desc.writable;
+					if(activate && desc && writable && !desc.get && !desc.set) {
+						delete desc.writable;
+						delete desc.value;
+						desc.get = get;
+						desc.set = set;
+						Object.defineProperty(object,key,desc);
+					}
+					if(reIndex) {
+						activity.step(() => set.call(object,value,true));
+					}
+				});
+				activity.step(() => resolver(object)).exec();
+			});
+			return promise;
 		}
 		async instances(keyArray,cls) {
 			let index = this,
 				results = [];
 			for(var i=0;i<keyArray.length;i++) {
 				try {
-					let instance = await index.get(keyArray[i]);
-					if(!cls || instance instanceof cls) {
-						results.push(instance);
-					}  
+					await index.get(keyArray[i],(instance) => {
+						if(!cls || instance instanceof cls) {
+							results.push(instance);
+						} 
+					});
 				} catch(e) {
 					console.log(e);
 				}
 			}
 			return results;
 		}
-		async match(keyArray,pattern,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey,nestedClass) {
-			this.__metadata__.commandQueue.add("match",[keyArray,pattern,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey,nestedClass]);
-		}
 		async match(pattern,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey,nestedClass) {
-			let index = this,
-				keys = Object.keys(pattern),
+			let keys = Object.keys(pattern).filter((key) => { return key!="$class"; }),
 				promises = [],
 				literals = {},
 				tests = {},
@@ -658,8 +921,16 @@ SOFTWARE.
 				joins = {},
 				cols = {},
 				results = classMatches,
-				metadata = index.__metadata__,
-				keyProperty = metadata.store.keyProperty();
+				currentclass = (pattern.$class ? pattern.$class : (nestedClass ? nestedClass : (classVars[classVar] ? classVars[classVar] : Object)));
+			if(typeof(currentclass)==="string") {
+				try {
+					currentclass = new Function("return " + currentclass)();
+				} catch(e) {
+					return Promise.resolve([]);
+				}
+			}
+			let	index = currentclass.index,
+				keyProperty = currentclass.name + "." + index.store.keyProperty;
 			Object.keys(classVars).forEach((classVar,i) => {
 				cols[classVar] = i;
 				if(!results[classVar]) { results[classVar] = null; }
@@ -693,7 +964,10 @@ SOFTWARE.
 					}
 					Object.keys(value).forEach((key) => {
 						if(classVars[key]) {
-							joins[i] = {rightVar:key, rightIndex:(nestedClass ? nestedClass.index : classVars[key].index), rightProperty:value[key], test:Index.$eeq};
+							let rightClass = (nestedClass ? nestedClass : classVars[key]),
+								rightKeyProperty = rightClass.index.store.keyProperty,
+								rightProperty = value[key];
+							joins[i] = {rightVar:key, rightClass:rightClass, rightKeyProperty:rightKeyProperty, rightProperty:rightProperty, test:Index.$eeq};
 							return;
 						}
 						if(key[0]==="$") {
@@ -703,7 +977,10 @@ SOFTWARE.
 								if(testvalue && typeof(testvalue)==="object") {
 									let second = Object.keys(testvalue)[0];
 									if(classVars[second]) {
-										return joins[i] = {rightVar:second, rightIndex:(nestedClass ? nestedClass.index : classVars[second].index), rightProperty:testvalue[second], test:test};
+										let rightClass= (nestedClass ? nestedClass : classVars[second]),
+											rightKeyProperty = rightClass.index.store.keyProperty,
+											rightProperty = testvalue[second];
+										return joins[i] = {rightVar:second, rightClass:rightClass, rightKeyProperty:rightKeyProperty, rightProperty:rightProperty, test:test};
 									}
 								}
 								tests[i] = true;
@@ -734,7 +1011,9 @@ SOFTWARE.
 						results[classVar] = []; 
 						return false;
 					}
-					let ids = Object.keys(node[value][type]);
+					let ids = Object.keys(node[value][type]).filter((id) => { 
+						return !currentclass || id.indexOf(currentclass.name+"@")===0; 
+					});
 					results[classVar] = (results[classVar] ? intersection(results[classVar],ids) : ids);
 					return results[classVar].length > 0;
 				});
@@ -763,6 +1042,7 @@ SOFTWARE.
 							}
 						});
 					});
+					ids = ids.filter((id) => { return !currentclass || id.indexOf(currentclass.name+"@")===0; });
 					results[classVar] = (results[classVar] ? intersection(results[classVar],ids) :  intersection(ids,ids));
 					return results[classVar].length > 0;
 				});
@@ -800,19 +1080,22 @@ SOFTWARE.
 								ids = ids.concat(Object.keys(node[id][nestedtype.name]));
 							}
 						});
+						ids = ids.filter((id) => { return !currentclass ||  id.indexOf(currentclass.name+"@")===0; });
 						results[classVar] = (results[classVar] ? intersection(results[classVar],ids) : intersection(ids,ids));
 						return results[classVar].length > 0;
 					});
 					if(results[classVar] && results[classVar].length===0) { resolve([]); return;}
 					let promises = [];
+					
 					nodes.forEach((node,i) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
 						let join = joins[i];
 						if(!join) { return true; }
-						promises.push(join.rightIndex.get(join.rightProperty));
+						promises.push(join.rightClass.index.get(join.rightProperty))
+						promises.push(join.rightClass.index.get(join.rightProperty));
 					});
 					Promise.all(promises).then((rightnodes) => { // variable not used, promises just ensure nodes loaded for matching
 						if(!results[classVar]) {
-							results[classVar] = Object.keys(index[keyProperty]);
+							results[classVar] = Object.keys(index.keys[keyProperty]).filter((id) => { return !currentclass || id.indexOf(currentclass.name+"@")===0; });;
 						}
 						nodes.every((node,i) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
 							let join = joins[i]; // {rightVar: second, rightIndex:classVars[second].index, rightProperty:testvalue[second], test:test};
@@ -820,30 +1103,37 @@ SOFTWARE.
 							if(cols[join.rightVar]===0) {
 								return true;
 							}
-							if(!join.rightIndex[join.rightProperty]) {
+							let rightIndex = join.rightClass.index,
+								rightKeyProperty = join.rightClass.name + "." + join.rightKeyProperty,
+								rightProperty = join.rightClass.name + "." + join.rightProperty;
+							if(!rightIndex.keys[rightProperty]) {
 								results[classVar] = [];
 								return false;
 							}
 							if(!results[join.rightVar]) {
-								results[join.rightVar] = Object.keys(join.rightIndex[keyProperty]);
+								results[join.rightVar] = Object.keys(rightIndex.keys[rightKeyProperty]).filter((id) => { 
+									return !currentclass || id.indexOf(rightIndex.name+"@")===0; 
+								});
 							}
 							let leftids = [];
 							Object.keys(node).forEach((leftValue) => {
 								Object.keys(node[leftValue]).forEach((leftType) => {
 									let innerleftids = Object.keys(node[leftValue][leftType]),
 										innerrightids = [],
-										some = false;
-									Object.keys(join.rightIndex[join.rightProperty]).forEach((rightValue) => {
-										Object.keys(join.rightIndex[join.rightProperty][rightValue]).forEach((rightType) => {
+										some = false,
+										pnode = rightIndex.keys[rightProperty];
+									Object.keys(pnode).forEach((rightValue) => {
+										let vnode = pnode[rightValue];
+										Object.keys(vnode).forEach((rightType) => {
 											if(join.test(Index.coerce(leftValue,leftType),Index.coerce(rightValue,rightType))) { 
 												some = true;
-												innerrightids = innerrightids.concat(Object.keys(join.rightIndex[join.rightProperty][rightValue][rightType]));
+												innerrightids = innerrightids.concat(Object.keys(vnode[rightType]));
 											}
 										});
 									});
 									if(some) {
-										leftids = leftids.concat(innerleftids);
-										innerrightids = intersection(innerrightids,innerrightids);
+										leftids = leftids.concat(innerleftids); // do we need to filter for class?
+										innerrightids = intersection(innerrightids,innerrightids);// do we need to filter for class?
 										innerleftids.forEach((id,i) => {
 											restrictRight[cols[join.rightVar]][id] = (restrictRight[cols[join.rightVar]][id] ? intersection(restrictRight[cols[join.rightVar]][id],innerrightids) : innerrightids);  
 										});
@@ -860,202 +1150,32 @@ SOFTWARE.
 			});
 		}
 		async put(object) {
-			this.__metadata__.commandQueue.add("put",[object]);
-		}
-		async put(object) {
 			let index = this,
-				store = index.__metadata__.store,
-				db = store.db(),
-				keyProperty = store.keyProperty(),
+				store = index.store,
+				db = store.db,
+				keyProperty = store.keyProperty,
 				id = object[keyProperty];
 			if(!id) {
 				id = object.constructor.name +  "@" + (_uuid ? _uuid.v4() : uuid.v4());
 				Object.defineProperty(object,keyProperty,{enumerable:true,configurable:true,value:id});
 			}
-			if(index[id]!==object) {
-				store.addScope(object);
-				try {
-					await store.set(id,object,db.activate);
-				} catch(e) {
-					console.log(e);
-				}
-			}
+			store.addScope(object);
 			return index.index(object,true,db.activate);
 		}
-		async index(object,reIndex,activate) {
-			this.__metadata__.commandQueue.add("index",[object,reIndex,activate]);
-		}
-		async index(object,reIndex,activate) {
+		async save(key,f) {
 			let index = this,
-				cls = object.constructor,
-				db = this.__metadata__.store.db(),
-				metadata = index.__metadata__,
-				keyProperty = metadata.store.keyProperty(),
-				id = object[keyProperty],
-				promises = [];
-			index[id] = object;
-			if(object.constructor.reindexCalls) {
-				object.constructor.reindexCalls.forEach((fname) => {
-					let f = object[fname];
-					if(!f.reindexer) {
-						Object.defineProperty(object,fname,{configurable:true,writable:true,value:function() {
-							let me = this;
-							f.call(me,...arguments);
-							index.index(me,true,db.activate).then(() => {
-								stream(me,db);
-							});
-						}});
-						object[fname].reindexer = true;
+				indexkey = (this.isInstanceKey(key) ? key : index.name + "." + key),
+				node = this.keys[indexkey];
+			if(node) {
+				return index.store.set(indexkey,node).then(() => {
+					if(f) {
+						f();
 					}
+				}).catch((e) => {
+					console.log(e);
 				});
 			}
-			Index.keys(object).forEach((key) => {
-				let value = object[key],
-					desc = Object.getOwnPropertyDescriptor(object,key);
-				function get() {
-					return get.value;
-				}
-				if(!reIndex) {
-					get.value = value;
-				}
-				function set(value,first) {
-					let instance = this,
-						cls = instance.constructor,
-						index = cls.index,
-						metadata = index.__metadata__,
-						keyProperty = metadata.store.keyProperty(),
-						db = metadata.store.db(),
-						id = instance[keyProperty],
-						oldvalue = get.value,
-						oldtype = typeof(oldvalue),
-						type = typeof(value);
-					if(oldtype==="undefined" || oldvalue!=value) {
-						if(type==="undefined") {
-							delete get.value;
-						} else {
-							get.value = value;
-						}
-						if(type==="function") {
-							value = value.call(instance);
-							type = typeof(value);
-						}
-						//set.queue.push({value:value,type:type});
-						return new Promise((resolve,reject) => {
-							//let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
-							//promise.then(() => { 
-								index.get(key,true).then((node) => {
-									node = index[key]; // re-assign since 1) we know it is loaded and initialized, 2) it may have been overwritten by another async
-									if(!instance[keyProperty]) { // object may have been deleted by another async call!
-										if(node[oldvalue] && node[oldvalue][oldtype]) {
-											delete node[oldvalue][oldtype][id];
-										}
-										resolve(true);
-										return;
-									} 
-									if(value && type==="object") {
-										let ocls = value.constructor,
-											oindex = ocls.index;
-										if(!oindex) {
-											db.index(ocls);
-										}
-										ocls.index.put(value).then(() => {
-											let okey = value[keyProperty],
-												otype = value.constructor.name;
-											if(!node[okey]) {
-												node[okey] = {};
-											}
-											if(!node[okey][otype]) {
-												node[okey][otype] = {};
-											}
-											node[okey][otype][id] = true;
-											let restorable = false;
-											if(node[oldvalue] && node[oldvalue][oldtype]) {
-												delete node[oldvalue][oldtype][id];
-												restorable = true;
-											}
-											let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
-											Promise.resolve().then(() => { 
-												index.save(key).then(() => {
-													if(!first) {
-														stream(object,db);
-													}
-													resolve(true);
-												}).catch((e) => {
-													throw(e);
-												});
-											}).catch((e) => {
-												delete node[okey][otype][id];
-												if(restorable) {
-													node[oldvalue][oldtype][id] = true;
-												}
-											});;
-											
-										});
-									} else if(type!=="undefined") {
-										if(!node[value]) {
-											node[value] = {};
-										}
-										if(!node[value][type]) {
-											node[value][type] = {};
-										}
-										node[value][type][id] = true;
-										let restorable = false;
-										if(node[oldvalue] && node[oldvalue][oldtype]) {
-											delete node[oldvalue][oldtype][id];
-											restorable = true;
-										}
-										let promise = (first ? Promise.resolve() : metadata.store.set(id,instance,true));
-										Promise.resolve().then(() => { 
-											index.save(key).then(() => {
-												if(!first) {
-													stream(object,db);
-												}
-												resolve(true);
-											}).catch((e) => {
-												throw(e);
-											});
-										}).catch((e) => {
-											delete node[value][type][id];
-											if(restorable) {
-												node[oldvalue][oldtype][id] = true;
-											}
-										});
-									}
-								});
-							//});
-						});
-					}
-					//set.queue = []; not yet used
-					return Promise.resolve(true);
-				}
-				let writable = desc && !!desc.configurable && !!desc.writable;
-				if(activate && desc && writable && !desc.get && !desc.set) {
-					delete desc.writable;
-					delete desc.value;
-					desc.get = get;
-					desc.set = set;
-					Object.defineProperty(object,key,desc);
-				}
-				if(reIndex) {
-					metadata.store.set(id,object,true);
-					promises.push(set.call(object,value,true));
-				}
-			});
-			return Promise.all(promises).catch((e) => { console.log(e); });
-		}
-		async save(key) {
-			this.__metadata__.commandQueue.add("save",[key]);
-		}
-		async save(key) {
-			let node = this[key],
-				metadata = this.__metadata__;
-			if(node) {
-				try {
-					return await metadata.store.set(metadata.prefix+key,node);
-				} catch(e) {
-					console.log(e);
-				}
-			}
+			return Promise.resolve()
 		}
 	}
 	Index.$ = (value,f) => {
@@ -1127,32 +1247,86 @@ SOFTWARE.
 		
 	class Store {
 		constructor(name="Object",keyProperty="@key",db) {
-			Object.defineProperty(this,"__metadata__",{value: {
-				name: name,
-				keyProperty: keyProperty,
-				db: db,
-				scope: {}
-			}});
+			this.name = name;
+			this.keyProperty = keyProperty;
+			this.db = db;
+			this.scope = {};
+			this.ready = async function(clear) {
+				if(this.ready.promised) {
+					return this.ready.promised;
+				}
+				this.ready.promised = (clear && this.clear ? this.clear() : Promise.resolve());
+				return this.ready.promised;
+			}
+			this.pending = {};
 		}
 		addScope(value) {
 			let me = this;
 			if(value && typeof(value)==="object") {
-				me.__metadata__.scope[value.constructor.name] = value.constructor;
+				me.scope[value.constructor.name] = value.constructor;
 				Object.keys(value).forEach((property) => {
 					me.addScope(value[property]);
 				});
 			}
 		}
-		db() { 
-			return this.__metadata__.db;
+		delete(key,action) {
+			let me = this,
+				promise = me.pending[key];
+			if(!promise) {
+				promise = me.pending[key] = new Promise((resolve,reject) => {
+					me.pending[key] = me.ready().then(() => action());
+					me.pending[key].then(() => {
+						delete me.pending[key];
+						resolve();
+					});
+				});
+				return promise;
+			}
+			return new Promise((resolve,reject) => {
+				promise.then(() => {
+					me.pending[key] = me.ready().then(() => action());
+					me.pending[key].then(() => {
+						delete me.pending[key];
+						resolve();
+					});
+				});
+			});
 		}
-		keyProperty() {
-			return this.__metadata__.keyProperty;
+		get(key,action) {
+			let me = this,
+				promise = me.pending[key];
+			if(!promise) {
+				promise = me.pending[key] = new Promise((resolve,reject) => {
+					me.pending[key] = me.ready().then(() => action());
+					me.pending[key].then((result) => {
+						if(result) {
+							me.restore(result).then((result) => resolve(result));
+						} else {
+							resolve(result);
+						}
+						delete me.pending[key];
+					});
+				});
+				return promise;
+			} 
+			return new Promise((resolve,reject) => {
+				promise.then(() => {
+					me.pending[key] = me.ready().then(() => action());
+					me.pending[key].then((result) => {
+						if(result) {
+							me.restore(result).then((result) => resolve(result));
+						} else {
+							resolve(result);
+						}
+						delete me.pending[key];
+					});
+				});
+			});
 		}
 		normalize(value,recursing) {
 			let me = this,
 				type = typeof(value),
-				keyProperty = me.keyProperty(),
+				keyProperty = me.keyProperty,
 				result;
 			if(value && type==="object") {
 				let id = value[keyProperty]
@@ -1189,17 +1363,16 @@ SOFTWARE.
 			let me = this,
 				type = typeof(json);
 			if(json && type==="object") {
-				let key = json[me.keyProperty()],
+				let key = json[me.keyProperty],
 					keys = Object.keys(json),
 					keymap = {};
 				if(typeof(key)==="string") {
 					let parts = key.split("@"),
-						cls = me.__metadata__.scope[parts[0]];
+						cls = me.scope[parts[0]];
 					if(!cls) {
 						try {
-							me.__metadata__.scope[parts[0]] = cls = Function("return " + parts[0])();
+							me.scope[parts[0]] = cls = Function("return " + parts[0])();
 						} catch(e) {
-							console.log(e);
 							let promises = [];
 							keys.forEach((property,i) => {
 								keymap[i] = property;
@@ -1219,19 +1392,22 @@ SOFTWARE.
 					if(keys.length===1) {
 						let object;
 						try {
-							object = await me.get(key);
+							object = await cls.index.get(key);
 						} catch(e) {
 							console.log(e);
 						}
+						
 						if(object instanceof cls) {
 							return Promise.resolve(object);
 						}
 						if(cls.fromJSON && object) {
-							return Promise.resolve(cls.fromJSON(object));
+							let instance = cls.fromJSON(object);
+							instance[cls.index.store.keyProperty] = key;
+							return Promise.resolve(instance);
 						}
 						let instance = Object.create(cls.prototype);
 						if(typeof(object)==="undefined") {
-							instance[me.keyProperty()] = key;
+							instance[cls.index.store.keyProperty] = key;
 							return Promise.resolve(instance);
 						}
 						let promises = [];
@@ -1264,7 +1440,8 @@ SOFTWARE.
 								});
 							});
 					} else if(cls.fromJSON) {
-							return Promise.resolve(cls.fromJSON(json));
+							let instance = cls.fromJSON(json);
+							return Promise.resolve(instance);
 					} else {
 						let instance = Object.create(cls.prototype),
 							promises = [];
@@ -1285,45 +1462,69 @@ SOFTWARE.
 			}
 			return Promise.resolve(json);
 		}
+		set(key,value,normalize,action) {
+			let me = this,
+				promise = me.pending[key];
+			if(!promise) {
+				promise = me.pending[key] = new Promise((resolve,reject) => {
+					me.pending[key] = me.ready().then(() => action(normalize ? me.normalize(value) : value));
+					me.pending[key].then((result) => {
+						delete me.pending[key];
+						resolve();
+					});
+				});
+				return promise;
+			} 
+			return new Promise((resolve,reject) => {
+				promise.then(() => {
+					me.pending[key] = me.ready().then(() => action(normalize ? me.normalize(value) : value));
+					me.pending[key].then((result) => {
+						delete me.pending[key];
+						resolve();
+					});
+				});
+			});
+		}
 	}
 	class MemStore extends Store {
+		constructor(name,keyProperty,db) {
+			super(name,keyProperty,db);
+			this.data = {};
+		}
 		async clear() {
 			let me = this;
-			Object.keys(me).forEach((key) => {
-				delete me[key];
+			Object.keys(me.data).forEach((key) => {
+				delete me.data[key];
 			});
 			return true;
 		}
 		async delete(key) {
-			if(this[key]) {
-				delete this[key];
+			if(this.data[key]) {
+				delete this.data[key];
 				return true;
 			}
 			return false;
 		}
 		async get(key) {
-			return this[key];
+			return this.data[key];
 		}
 		async set(key,value) {
-			this[key] = value;
+			this.data[key] = value;
 			return true;
 		}
 	}
 	class IronCacheStore extends Store {
 		constructor(name,keyProperty,db,clear) {
 			super(name,keyProperty,db);
-			if(clear) {
-				this.clear();
-			}
+			this.ready(clear);
 		}
 		async clear() {
 			let me = this;
 			return new Promise((resolve,reject) => {
-				me.__metadata__.db.ironCacheClient.clearCache(me.__metadata__.name, function(err, res) {
+				me.db.ironCacheClient.clearCache(me.name, function(err, res) {
 					if (err) {
 						resolve(false);
 					} else {
-						//console.log(res);
 						resolve(true);
 					}
 				});
@@ -1331,231 +1532,304 @@ SOFTWARE.
 		}
 		async delete(key) {
 			let me = this;
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.ironCacheClient.del(me.__metadata__.name, key, function(err, res) {
+			return super.delete(key, () => new Promise((resolve,reject) => {
+				me.db.ironCacheClient.del(me.name, key, function(err, res) {
 					if (err) {
-						//console.log("del ",err);
 						reject(err);
 					} else {
-						//console.log(res);
 						resolve(true);
 					}
 				});
-			});
+			}));
 		}
 		async get(key) {
 			let me = this;
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.ironCacheClient.get(me.__metadata__.name, key, function(err, res) {
+			return super.get(key,() => new Promise((resolve,reject) => {
+				me.db.ironCacheClient.get(me.name, key, function(err, res) {
 					if (err) {
 						resolve();
 					} else {
-						//console.log(res);
-						me.restore(JSON.parse(res.value)).then((value) => {
-							resolve(value);
-						});
+						resolve(JSON.parse(res.value));
 					}
 				});
-			});
+			}));
 		}
 		async set(key,value,normalize) {
 			let me = this;
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.ironCacheClient.put(me.__metadata__.name, key, { value: JSON.stringify((normalize ? me.normalize(value) : value)) }, function(err, res) {
+			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
+				me.db.ironCacheClient.put(me.name, key, { value: JSON.stringify(normalized) }, function(err, res) {
 					if (err) {
 						reject(err);
 					} else {
-						//console.log(res);
 						resolve(true);
 					}
 				});
-			});
+			}));
 		}
 	}
 	class RedisStore extends Store {
 		constructor(name,keyProperty,db,clear) {
 			super(name,keyProperty,db);
-			if(clear) {
-				this.clear();
-			}
+			this.storage = this.db.redisClient;
+			this.storage.delete = this.storage.del;
+			this.ready(clear);
 		}
 		async clear() {
 			let me = this;
 			return new Promise((resolve,reject) => {
-				me.__metadata__.db.redisClient.flushdb(function(err, res) {
+				let key = me.name + "." + me.keyProperty;
+				me.storage.hkeys(me.name, (err, values) => {
 					if (err) {
-						//console.log("clear ",err);
-						resolve(false);
-					} else {
-						//console.log("clear",res);
-						resolve(true);
-					}
-				});
-			});
-		}
-		async delete(key) {
-			let me = this;
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.redisClient.del(key, function(err, res) {
-					if (err) {
-						//console.log("del ",err);
-						reject(err);
-					} else {
-						//console.log("del ",res);
-						resolve(true);
-					}
-				});
-			});
-		}
-		async get(key) {
-			let me = this;
-			//console.log("get ", key);
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.redisClient.get(key, function(err, value, key) {
-					if (err) {
-						//console.log("get ",key,err);
 						resolve();
 					} else {
-						//console.log("get ",key,value);
-						if(!value) {
+						if(values.length===0) {
 							resolve();
 						} else {
-							me.restore(JSON.parse(value)).then((value) => {
-								resolve(value);
+							let multi = me.storage.multi();
+							values.forEach((id) => {
+								multi = multi.hdel(me.name, id, function(err, res) {
+									if (err) {
+										reject(err);
+									} else {
+										resolve(true);
+									}
+								})
+							});
+							multi.exec((err,replies) => {
+								if(err) {
+									console.log(err);
+									reject(err);
+								} else {
+									resolve(true);
+								}
 							});
 						}
 					}
 				});
 			});
 		}
-		async set(key,value,normalize) {
+		async delete(key) {
 			let me = this;
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.redisClient.set(key, JSON.stringify((normalize ? me.normalize(value) : value)), function(err, res) {
+			return super.delete(key,() => new Promise((resolve,reject) => {
+				me.storage.hdel(me.name, key, (err, res) => {
 					if (err) {
-						//console.log("set ",err);
 						reject(err);
 					} else {
-						//console.log("set",res);
-						resolve(true);
+						resolve();
 					}
 				});
-			});
+			}));
+		}
+		async get(key) {
+			let me = this;
+			return super.get(key,() => new Promise((resolve,reject) => {
+				me.storage.hget(me.name, key, (err, value) => {
+					if (err) {
+						resolve();
+					} else {
+						if(!value) {
+							resolve();
+						} else {
+							resolve(JSON.parse(value));
+						}
+					}
+				});
+			}));
+		}
+		async set(key,value,normalize) {
+			let me = this;
+			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
+				me.storage.hset(me.name,key, JSON.stringify(normalized), (err, res) => {
+					if (err) {
+						reject(err);
+					} else {
+						resolve();
+					}
+				});
+			}));
 		}
 	}
 	class MemcachedStore extends Store {
 		constructor(name,keyProperty,db,clear) {
 			super(name,keyProperty,db);
-			if(clear) {
-				this.clear();
-			}
+			this.storage = this.db.memcachedClient;
+			this.ready(clear);
 		}
 		async clear() {
 			let me = this;
 			return new Promise((resolve,reject) => {
-				me.__metadata__.db.memcachedClient.flush(function(err, res) {
+				let key = me.name + "." + me.keyProperty;
+				me.storage.get(key, (err,value) => {
 					if (err) {
-						//console.log("clear ",err);
-						resolve(false);
-					} else {
-						//console.log("clear",res);
-						resolve(true);
-					}
-				});
-			});
-		}
-		async delete(key) {
-			let me = this;
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.memcachedClient.delete(key, function(err, res) {
-					if (err) {
-						//console.log("del ",err);
-						reject(err);
-					} else {
-						//console.log("del ",res);
-						resolve(true);
-					}
-				});
-			});
-		}
-		async get(key) {
-			let me = this;
-			//console.log("get ", key);
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.memcachedClient.get(key, function(err, value, key) {
-					if (err) {
-						//console.log("get ",key,err);
 						resolve();
 					} else {
-						//console.log("get ",key,value);
 						if(!value) {
 							resolve();
 						} else {
-							me.restore(JSON.parse(value)).then((value) => {
-								resolve(value);
+							me.storage.delete(key, (err, res) => {
+								if (err) {
+									reject(err);
+								} else {
+									resolve(true);
+								}
 							});
 						}
 					}
 				});
 			});
 		}
-		async set(key,value,normalize) {
+		async delete(key) {
 			let me = this;
-			return new Promise((resolve,reject) => {
-				me.__metadata__.db.memcachedClient.set(key, JSON.stringify((normalize ? me.normalize(value) : value)), function(err, res) {
+			return super.delete(key,() => new Promise((resolve,reject) => {
+				me.storage.delete(key, (err, res) => {
 					if (err) {
-						//console.log("set ",err);
 						reject(err);
 					} else {
-						//console.log("set",res);
 						resolve(true);
 					}
 				});
+			}));
+		}
+		async get(key) {
+			let me = this;
+			return super.get(key,() => new Promise((resolve,reject) => {
+				me.storage.get(key, (err,value,key) => {
+					if (err) {
+						resolve();
+					} else {
+						if(!value) {
+							resolve();
+						} else {
+							resolve(JSON.parse(value));
+						}
+					}
+				});
+			}));
+		}
+		async set(key,value,normalize) {
+			let me = this;
+			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
+				me.storage.set(key,JSON.stringify(normalized), (err, res) => {
+					if (err) {
+						reject(err);
+					} else {
+						resolve(true);
+					}
+				});
+			}));
+		}
+	}
+	class LevelUPStore extends Store {
+		constructor(name,keyProperty,db,clear) {
+			super(name,keyProperty,db);
+			this.storage = db.levelUPClient(db.name + "/" + name); //db.levelUPClient(db.name);
+			this.ready(clear);
+		}
+		async clear() {
+			let me = this,
+				promises = [],
+				resolver,
+				rejector,
+				promise = new Promise((resolve,reject) => { resolver = resolve; rejector = reject; });
+			me.storage.createKeyStream().on("data", (key) => {
+				promises.push(me.delete(key,true));
+			}).on("end",() => {
+				Promise.all(promises).then(() => {
+					resolver(true);
+				});
+			}).on("error", () => {
+				rejector(err);
 			});
+			return promise;
+		}
+		async delete(key) {
+			let me = this;
+			return super.delete(key,() => new Promise((resolve,reject) => {
+				me.storage.del(key+".json",{},(err) => {
+					if(err) {
+						if(err.notFound) {
+							resolve(true);
+						} else {
+							reject(err);
+						}
+					} else {
+						resolve(true);
+					}
+				});
+			}));
+		}
+		async get(key) {
+			let me = this;
+			return super.get(key, () => new Promise((resolve,reject) => {
+				me.storage.get(key+".json",{},(err,value) => {
+					if(err) {
+						if(err.notFound) {
+							resolve();
+						} else {
+							reject(err);
+						}
+					} else if(!value) {
+						resolve();
+					} else {
+						resolve(JSON.parse(value));
+					}
+				});
+			}));
+		}
+		async set(key,value,normalize) {
+			let me = this;
+			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
+				me.storage.put(key+".json",JSON.stringify(normalized),{},(err) => {
+					if(err) {
+						reject(err);
+					} else {
+						resolve(true);
+					}
+				});
+			}));
 		}
 	}
 	class LocalStore extends Store {
 		constructor(name,keyProperty,db,clear) {
 			super(name,keyProperty,db);
 			if(typeof(window)!=="undefined") {
-				this.__metadata__.storage = window.localStorage;
+				this.storage = window.localStorage;
 			} else {
 				let r = require,
 					LocalStorage = r("./LocalStorage.js").LocalStorage;
-				this.__metadata__.storage = new LocalStorage(db.name);
+				this.storage = new LocalStorage(db.name + "/" + name);
 			}
 			if(clear) {
-				this.__metadata__.storage.clear();
+				this.storage.clear();
 			}
 		}
 		async clear() {
-			let me = this;
-			me.__metadata__.storage.clear();
-			Object.keys(me).forEach((key) => {
-				delete me[key];
-			});
+			this.storage.clear();
 			return true;
 		}
-		async delete(key,force) {
-			if(this[key] || force) {
-				this.__metadata__.storage.removeItem(key+".json");
-				delete this[key];
-				return true;
-			}
-			return false;
+		async delete(key) {
+			return super.delete(key,() => new Promise((resolve,reject) => {
+				this.storage.removeItem(key+".json");
+				resolve(true);
+			}));
 		}
-		async get(key,recursing) {
-			let value = this.__metadata__.storage.getItem(key+".json");
-			if(value!=null) {
-				this[key] = true;
-				return this.restore(JSON.parse(value));
-			}
-			return Promise.resolve(undefined);
+		async get(key) {
+			let me = this;
+			return super.get(key,() => new Promise((resolve,reject) => {
+				let value = me.storage.getItem(key+".json");
+				if(!value) {
+					resolve();
+				} else {
+					resolve(JSON.parse(value));
+				}
+			}));
 		}
 		async set(key,value,normalize) {
-			this[key] = true;
-			this.__metadata__.storage.setItem(key+".json",JSON.stringify(normalize ? this.normalize(value) : value));
-			return true;
+			let me = this;
+			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
+				me.storage.setItem(key+".json",JSON.stringify(normalized));
+				resolve(true)
+			}));
 		}
 	}
 	class LocalForageStore extends Store {
@@ -1563,64 +1837,51 @@ SOFTWARE.
 			super(name,keyProperty,db);
 			if(typeof(window)!=="undefined") {
 				//window.localforage.config({name:"ReasonDB"})
-				this.__metadata__.storage = window.localforage;
+				this.storage = window.localforage;
 			} else {
 				let r = require,
 				LocalStorage = r("node-localstorage").LocalStorage;
-				this.__metadata__.storage = new LocalStorage("./db/" + name);
+				this.storage = new LocalStorage("./db/" + name);
 			}
 			if(clear) {
-				this.__metadata__.storage.clear();
+				this.storage.clear();
 			}
 		}
 		async clear() {
 			try {
-				await this.__metadata__.storage.clear();
+				await this.storage.clear();
 			} catch(e) {
 				console.log(e);
 			}
-			Object.keys(me).forEach((key) => {
-				delete me[key];
-			});
 			return true;
 		}
-		async delete(key,force) {
-			let index = this;
-			if(this[key] || force) {
-				try {
-					await index.__metadata__.storage.removeItem(key+".json");
-				} catch(e) {
-					console.log(e);
-				}
-				delete this[key];
-				return true;
-			}
-			return false;
+		async delete(key) {
+			let me = this;
+			return super.delete(key, () => new Promise((resolve,reject) => {
+				me.storage.removeItem(key+".json").then(() => {
+					resolve(true);
+				});
+			}));
 		}
 		async get(key) {
-			let value;
-			try {
-				value = await this.__metadata__.storage.getItem(key+".json");
-			} catch(e) {
-				console.log(e);
-			}
-			if(value!=null) {
-				this[key] = true;
-				try {
-					return await this.restore(value);
-				} catch(e) {
-					console.log(e);
-				}
-			}
+			let me = this;
+			return super.get(key, () => new Promise((resolve,reject) => {
+				me.storage.getItem(key+".json").then((result) => {
+					if(!result) {
+						resolve();
+					} else {
+						resolve(result);
+					}
+				})
+			}));
 		}
 		async set(key,value,normalize) {
-			this[key] = true;
-			try {
-				await this.__metadata__.storage.setItem(key+".json",normalize ? this.normalize(value) : value);
-			} catch(e) {
-				console.log(e);
-			}
-			return true;
+			let me = this;
+			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
+				 me.storage.setItem(key+".json",normalized).then(() => {
+					 resolve(true);
+				 })
+			}));
 		}
 	}
 	class ReasonDB {
@@ -1686,7 +1947,7 @@ SOFTWARE.
 			storageType = (storageType ? storageType : db.storageType);
 			clear = (clear ? clear : db.clear);
 			if(!cls.index || clear) { 
-				cls.index = (db.shared && cls!==Object ? Object.index : new Index(cls,keyProperty,db,storageType,clear));
+				cls.index = new Index(cls,keyProperty,db,storageType,clear);
 				db.classes[cls.name] = cls;
 			}
 			return cls.index;
@@ -1708,12 +1969,12 @@ SOFTWARE.
 														let i = cursor.classVarMap[classVar],
 															cls = classVars[classVar];
 														cursor.cxproduct.collections[i].forEach((id) => {
-															promises.push(cls.index.delete(id));
+															promises.push(cls.index.delete(id).catch((e) => { console.log(e); }));
 														});
 													});
 													Promise.all(promises).then((results) => {
 														resolve(results);
-													});
+													}).catch((e) => { console.log(e); });
 													return;
 												}
 												resolve([]);
@@ -1727,39 +1988,62 @@ SOFTWARE.
 				}
 			}
 		}
-		insert(object) {
-			var db = this;
+		insert() {
+			var db = this,
+				objects = [].slice.call(arguments,0);
 			return {
 				into(cls) {
+					let classes;
+					if(arguments.length===1) {
+						classes = new Array(...objects);
+						classes.forEach((object,i) => {
+							classes[i] = cls;
+						});
+					} else {
+						classes = [].slice.call(...arguments,0);
+					}
 					return {
 						exec() {
-							return new Promise((resolve,reject) => {
-								let instance,
-									thecls = (cls ? cls : object.constructor);
-								if(object instanceof cls) {
-									instance = object;
-								} else if(cls.fromJSON) {
-									instance = cls.fromJSON(object);
-								} else {
-									instance = Object.create(cls.prototype);
-									Object.defineProperty(instance,"constructor",{configurable:true,writable:true,value:thecls});
-									Object.keys(object).forEach((key) => {
-										instance[key] = object[key];
+							let resolver,
+								rejector,
+								promise = new Promise((resolve,reject) => { resolver = resolve; rejector = reject; }),
+								activity = new Activity(resolver);
+							objects.forEach((object,i) => {
+								activity.step(() => {
+										let instance;
+										if(object instanceof cls) {
+											instance = object;
+										} else if(cls.fromJSON) {
+											instance = cls.fromJSON(object);
+										} else {
+											instance = Object.create(cls.prototype);
+											Object.defineProperty(instance,"constructor",{configurable:true,writable:true,value:cls});
+											Object.keys(object).forEach((key) => {
+												instance[key] = object[key];
+											});
+										}
+										if(!cls.index) {
+											cls.index = db.index(cls);
+										}
+										return cls.index.put(instance);
 									});
-								}
-								if(!cls.index) {
-									cls.index = db.index(cls);
-								}
-								cls.index.put(instance).then(() => {
-									stream(instance,db);
-									resolve(instance);
-								});	
 							});
+							activity.step(() => {
+								activity.results.forEach((instance) => {
+									stream(instance,db);
+								});
+								resolver(activity.results);
+							}).exec();
+							return promise;
 						}
 					}
 				},
 				exec() {
-					return this.into(object.constructor).exec();
+					let classes = [];
+					objects.forEach((object) => {
+						classes.push(object.constructor);
+					})
+					return this.into(...classes).exec();
 				}
 			}
 		}
@@ -1812,17 +2096,20 @@ SOFTWARE.
 										let matches = {},
 											restrictright = {},
 											matchvars = [],
-											promises = [];
+											activity = new Activity();
 										Object.keys(pattern).forEach((classVar) => {
-											if(!classVars[classVar] || !classVars[classVar].index) { 
+											if(!classVars[classVar]) { 
 												return;
 											}
+											if(!classVars[classVar].index) {
+												db.index(classVars[classVar]);
+											}
 											matchvars.push(classVar);
-											promises.push(classVars[classVar].index.match(pattern[classVar],classVars,matches,restrictright,classVar));
+											activity.step(() => classVars[classVar].index.match(pattern[classVar],classVars,matches,restrictright,classVar));
 										});
-										Promise.all(promises).then((results) => {
+										activity.step(() => {
 											let pass = true;
-											results.every((result,i) => {
+											activity.results.every((result,i) => {
 												if(result.length===0) {
 													pass = false;
 												}
@@ -1844,6 +2131,9 @@ SOFTWARE.
 												});
 												function filter(row,index,cxp) {
 													return row.every((item,i) => {
+														if(!item) {
+															return false;
+														}
 														if(i===0 || !restrictright[i]) {
 															return true;
 														}
@@ -1869,9 +2159,7 @@ SOFTWARE.
 												}
 												return null;
 											}
-										}).catch((e) => {
-											console.log(e);
-										});
+										}).exec();
 									});
 								}
 							}
@@ -1967,6 +2255,8 @@ SOFTWARE.
 	ReasonDB.IronCacheStore = IronCacheStore;
 	ReasonDB.RedisStore = RedisStore;
 	ReasonDB.MemcachedStore = MemcachedStore;
+	ReasonDB.LevelUPStore = LevelUPStore;
+	ReasonDB.Activity = Activity;
 	if(typeof(module)!=="undefined") {
 		module.exports = ReasonDB;
 	}
