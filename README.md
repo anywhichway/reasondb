@@ -1,8 +1,10 @@
 # reasondb
 
-A 100% native JavaScript browser or NodeJS database with a SQL like syntax (JOQULAR), JSON projections or live object result sets, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, swapable persistence engines, built in statistical sampling, and automatic synchronization of object changes into the database and indexes in as little as 70K.
+A 100% native JavaScript browser or NodeJS database with a SQL like syntax (JOQULAR), JSON projections or live object result sets, asynchronouse cursors, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, swapable persistence engines, built in statistical sampling, and automatic synchronization of object changes into the database and indexes in as little as 70K.
 
 Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, LevelUP, LocalForage, and IronCache. Or, add your own favoriate store in just an hour (we timed ourselves for Redis and MemCached :-).
+
+[![NPM](https://nodei.co/npm/reasondb.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/reasondb/)
 
 
 ## Installation
