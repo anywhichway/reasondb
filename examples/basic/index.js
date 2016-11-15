@@ -6,7 +6,7 @@ var ReasonDB,
 if(typeof(window)==="undefined") {
 	//Promise = require("bluebird");
 	//Promise.longStackTraces();
-	ReasonDB = require("../../lib/index.js"); // Load ReasonDB if running on the server.
+	ReasonDB = require("../../src/index.js"); // Load ReasonDB if running on the server.
 	let levelup = require("levelup");
 	LevelUPClient = levelup; //("./examples/basic/db");
 }

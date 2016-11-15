@@ -7,6 +7,7 @@ Add JOQULAR query capability, joins, and streaming analytics to popular back-end
 [![NPM](https://nodei.co/npm/reasondb.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/reasondb/)
 
 
+
 ## Installation
 
 npm install reasondb
@@ -29,7 +30,7 @@ tests and examples are "decafinated" and print to the console rather than the br
 <script src="../browser/reasondb.js"></script>
 ```
 
-NodeJS 6.x users can use a smaller babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (124K): 
+NodeJS 6.x users can use a smaller Babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (124K): 
 
 ```
 require("index.js");
@@ -147,7 +148,7 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>
 
 2) `ReasonBD.LocalStore` uses browser localStorage in Chrome and Firefox. Microsoft Edge just fails. In NodeJS the same API saves to disk with no quota limitations. `<nameOrPath>` is ignored in the browser. On NodeJS, it is a path relative to the execution context of NodeJS.
 
-3) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
+3) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser. In fact, using a remote `ReasonDB.RedisStore` is generally faster. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
 
 4) `ReasonDB.IronCacheStore` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. Also,
 unit testing has occassional tests that fail due to timing interactions with the iron-cache server, i.e. key updates are not
@@ -168,7 +169,7 @@ See ## Extending ReasonDB for how to add new storage types.
 
 `clear` - Clear storage when creating the database.
 
-`activate` - Activat eobjects to automatically update the database and indexes when changed. `false` dooes not currently work but is under development.
+`activate` - Activate objects to automatically update the database and indexes when changed. `false` dooes not currently work but is under development.
 
 `options` - See storage types above for the only current options, which are instantiated storage clients.
 
@@ -240,17 +241,22 @@ Deleting an object from the database removes its unique key and removes it from 
 
 `db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
 
-A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`, a retriever `get(index)`, and a computational method, `count`. It also has the data element `maxCount`. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided <projection>. All the methods are asynchronous and return Promises. 
+A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`, a retriever `get(index)`, and a computational method, `count`. It also has the data element `maxCount`. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided <projection>. All the methods are asynchronous and return Promises. See the ###Cursor documentation for more details.
 
-In order to optimize memory and speed, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the acutal number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count`.
+In order to optimize memory and speed, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the actual number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count`.
 
 A `projection` specification takes the form `{<desiredPropertyName>: {<classVariable>: "<resultPropertyName"}[,...]}`.
+
+`.first(number)` results in a fixed cursor with the first N records or all the records if N is greater than the count of all records.
+
+`.random(number)` results in a fixed cursor with random N records or all the records if N is greater than the count of all records.
+
+`.sample(confidence,range)` results in a fixed cursor with a `confidence` than the included records are representative of the entire result set at +/- the `range`.
 
 The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
 See ###Patterns above for a general description of the `where` clause.
 
-See the ##Cursor documentation for more details.
 
 ### When - Streaming Analytics
 
@@ -351,7 +357,7 @@ Sometimes it may be necessary to force a re-index of an object based on changes 
 
 Adding predicates can be done in as little as one line of code!
 
-Here is the definitions of the RegExp predicate:
+Here is the definition of the RegExp predicate:
 
 `Index.$matches = function(value,testValue) { return value.search(testValue)>=0; }`
 
@@ -469,6 +475,29 @@ As side effect of the above is that it is not currently possible to know the act
 
 An exception to the cross-product based cursor, is a cursor that results from down selection. The select clauses `first`, `random`, `sample`, result in the return of cursors with fixed pre-computed rows. However, the calling interface is identical. In fact, the same class is used to implement both types of cursor.
 
+## Performance
+
+Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records.
+
+### Browser
+
+MemStore: 4,100 rec/sec insert, 44,800 rec/sec select, 44,800 rec/sec read, 44,800 rec/sec cached select/read
+LocalStore: 645 rec/sec insert, 22,500 rec/sec select, 1,825 rec/sec read, 36,400 rec/sec cached select/read 
+LocalForageStore: 10 rec/sec insert, 2,000 rec/sec select, 500 rec/sec read, 45,250 rec/sec cached select/read
+
+### Server
+
+MemStore: 8,500 rec/sec insert, 15,150 rec/sec select, 15,150 rec/sec read, 15,150 rec/sec cached select/read
+LocalStore: 35 rec/sec insert, 13,150 rec/sec select, 1,750 rec/sec read, 15,150 rec/sec cached select/read
+LevelUPStore: 120 rec/sec insert, 750 rec/sec select, 375 rec/sec read, 15,150 rec/sec cached select/read
+RedisStore: 10 rec/sec insert, 2,550 rec/sec select, 1,750 rec/sec read, 27,750 rec/sec cached select/read, (includes remote network latency)
+IronCacheStore: 3 rec/sec insert, 1,550 rec/sec select, BLOCKS/ERRS rec/sec read, 41,600 rec/sec cached select/read (includes remote network latency)
+
+The server performance for cached select/read is puzzling. One would expect it to be faster than a browser. However, the version of the
+JavaScript engine in the browsers is newer than that in NodeJS on the server. Alternatively, since IronCache does show better performance,
+there may be a race condition that is not manifested in the browser. Our experienc eis that Promises can behave quite differently in
+terms of sequencing in NodeJS.
+
 ## Building & Testing
 
 Building, testing and quality assessment are conducted using Travis, Mocha, Chai, Istanbul, Code Climate, and Codacity.
@@ -479,10 +508,12 @@ The unit tests and examples can be run on the server in NodeJS by executing just
 
 ## Notes
 
-The codebase is currently light on error handling and test coverage is only at 30%.
+The codebase is currently light on error handling and test coverage is only at 40%.
 
 
 ## Updates (reverse chronological order)
+
+2016-11-15 v0.1.5 Added performance tests in `examples/load` directory.
 
 2016-11-13 v0.1.4 Further optimizations to ensure action sequencing is correct when using a remote datastore. This fixed issues with Redis. Simplified coding to add new persistence stores.
 

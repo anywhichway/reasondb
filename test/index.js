@@ -8,8 +8,8 @@ var chai,
 if(typeof(window)==="undefined") {
 	chai = require("chai");
 	expect = chai.expect;
-	Promise = require("bluebird");
-	Promise.longStackTraces();
+	//Promise = require("bluebird");
+	//Promise.longStackTraces();
 	ReasonDB = require("../lib/index.js");
 	let levelup = require("levelup");
 	LevelUPClient = levelup; //("./examples/basic/db");

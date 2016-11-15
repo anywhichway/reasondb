@@ -7,8 +7,10 @@
 <script src="../node_modules/localforage/dist/localforage.js"></script>
 <script src="../node_modules/node-uuid/uuid.js"></script>
 <!-- script src="../node_modules/bluebird/js/browser/bluebird.js"></script -->
-<!-- script src="../src/index.js"></script -->
-<script src="../browser/reasondb.js"></script>
+<!-- script src="../node_modules/blanket/dist/qunit/blanket.min.js" data-cover-adapter="mocha-blanket.js"></script -->
+<script src="../browser/reasondb.js" data-cover></script>
+<!--  script src="../src/index.js" data-cover></script -->
+
 </head>
 <body>
 Test cases populate localStorage in Chrome and Firefox. Review localStorage using browsers debugging tools to see database structure after running tests.

@@ -1,13 +1,13 @@
 {
-  "name": "ReasonDB",
-  "version": "0.1.4",
-  "description": "A 100% JavaScript client and server database with a SQL like syntax, streaming analytics, 18 built-in predicates, in-line fat arrow predicates, predicate extensibility, indexed Dates and Arrays, joins, nested matching, and swapable persistence engines in as little as 70K.",
+  "name": "reasondb",
+  "version": "0.1.5",
+  "description": "A 100% JavaScript browser/nodejs database with SQL like syntax, streaming analytics, 18 built-in predicates, in-line fat arrow predicates, predicate extensibility, indexed Dates and Arrays, joins, nested matching, swapable persistence engines in as little as 70K.",
   "main": "lib/index.js",
   "client": "./browser/reasondb.js",
   "reveal": true,
   "isomorphic": false,
   "scripts": {
-    "test": "npm run build & istanbul cover node_modules/mocha/bin/_mocha --report lcov -- -R spec",
+    "test": "istanbul cover node_modules/mocha/bin/_mocha --report lcov -- -R spec",
     "build": "babel src -d lib && cp src/LocalStorage.js lib/LocalStorage.js && npm run browserify",
     "browserify": "browserify lib/index.js -t babelify  -o browser/reasondb.js",
     "prepublish": "npm run build"
@@ -23,13 +23,15 @@
     "MongoDB",
     "Cloudbase",
     "CloudDB",
+    "JOQULAR",
     "JSON",
     "database",
     "Redis",
     "Memcached",
     "IronCache",
     "levelup",
-    "leveldown"
+    "leveldown",
+    "Localstorage"
   ],
   "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
   "license": "MIT",
@@ -42,6 +44,7 @@
     "babel-plugin-transform-runtime": "^6.15.0",
     "babel-preset-latest": "^6.16.0",
     "babelify": "^7.3.0",
+    "blanket": "^1.2.3",
     "bluebird": "^3.3.5",
     "browserify": "^13.0.0",
     "chai": "^3.4.1",

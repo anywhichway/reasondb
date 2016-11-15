@@ -1839,9 +1839,7 @@ SOFTWARE.
 				//window.localforage.config({name:"ReasonDB"})
 				this.storage = window.localforage;
 			} else {
-				let r = require,
-				LocalStorage = r("node-localstorage").LocalStorage;
-				this.storage = new LocalStorage("./db/" + name);
+				return new LocalStore(name,keyProperty,db,clear);
 			}
 			if(clear) {
 				this.storage.clear();
