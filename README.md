@@ -482,15 +482,21 @@ Performance is tested using a single member object in a batch insertion or selec
 ### Browser
 
 MemStore: 4,100 rec/sec insert, 44,800 rec/sec select, 44,800 rec/sec read, 44,800 rec/sec cached select/read
+
 LocalStore: 645 rec/sec insert, 22,500 rec/sec select, 1,825 rec/sec read, 36,400 rec/sec cached select/read 
+
 LocalForageStore: 10 rec/sec insert, 2,000 rec/sec select, 500 rec/sec read, 45,250 rec/sec cached select/read
 
 ### Server
 
 MemStore: 8,500 rec/sec insert, 15,150 rec/sec select, 15,150 rec/sec read, 15,150 rec/sec cached select/read
+
 LocalStore: 35 rec/sec insert, 13,150 rec/sec select, 1,750 rec/sec read, 15,150 rec/sec cached select/read
+
 LevelUPStore: 120 rec/sec insert, 750 rec/sec select, 375 rec/sec read, 15,150 rec/sec cached select/read
+
 RedisStore: 10 rec/sec insert, 2,550 rec/sec select, 1,750 rec/sec read, 27,750 rec/sec cached select/read, (includes remote network latency)
+
 IronCacheStore: 3 rec/sec insert, 1,550 rec/sec select, BLOCKS/ERRS rec/sec read, 41,600 rec/sec cached select/read (includes remote network latency)
 
 The server performance for cached select/read is puzzling. One would expect it to be faster than a browser. However, the version of the
