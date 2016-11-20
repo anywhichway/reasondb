@@ -25,7 +25,7 @@ Users of Chrome 54.0 and greater can use the file at src/index.js so long as nod
 <script src="../src/index.js"></script>
 ```
 
-A browserified version is located at browser/reasondb.js (203K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chome is almost twice as fast as either Firefox or Edge. **Note***: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the
+A browserified version is located at browser/reasondb.js (203K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note***: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the
 tests and examples are "decafinated" and print to the console rather than the browser page.
 
 ```
