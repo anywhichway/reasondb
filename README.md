@@ -2,10 +2,11 @@
 
 The first 100% native JavaScript automaticaly synchronizing object database with a SQL like syntax (JOQULAR) and swampable persistence engines for the browser or NodeJS . ReasonDB also supports JSON projections or live object result sets, asynchronouse cursors, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, built in statistical sampling, and configurable unique id properties in as little as 75K.
 
+ReasonDB does not require that the class of objects stored be a subclass of any other class, nor does it require objects provide a special calling interface. ReasonDB is probably more compatible with existing object models than any other JSON database.
+
 Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, LevelUP, LocalForage, and IronCache. Or, use our super fast JSONBlockStore. Not enough? Add your own favorite store in just an hour (we timed ourselves for Redis and MemCached :-).
 
 [![NPM](https://nodei.co/npm/reasondb.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/reasondb/)
-
 
 
 ## Installation
@@ -486,6 +487,9 @@ An exception to the cross-product based cursor, is a cursor that results from do
 
 Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records. The `select` test does a query but does not resolve data in teh records; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
 
+Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz machine with 8GB RAM and fixed hard drives. Numbers provided are the average of 5 runs.
+
+
 | Storage                    | insert rec/sec | select rec/sec | read rec/sec | cached select/read rec sec |
 |----------------------------|----------------|----------------|--------------|----------------------------|
 | JSONBlockStore (server)    | 700            | 41,500         | 3,100        | 32,500                     |
@@ -496,7 +500,7 @@ Performance is tested using a single member object in a batch insertion or selec
 | MemStore (browser)         | 4,800          | 46,800         | 46,800       | 46,800                     |
 | MemStore (server)          | 10,100         | 22,700         | 22,700       | 22,700                     |
 | RedisStore (remote)        | 10             | 2,550          | 1,750        | 27,750                     |
-| IronCacheStore (remote)    | 3              | 1,550          | BLOCK/.ERRS  | 41,600                     |
+| IronCacheStore (remote)    | 3              | 1,550          | BLOCKS/ERRS  | 41,600                     |
 
 The server performance for cached select/read is puzzling as are the MemStore performance differences between browser and server. 
 One would expect the server to be faster than a browser. However, the version of the JavaScript engine in the browsers 
@@ -514,6 +518,8 @@ The unit tests and examples can be run on the server in NodeJS by executing just
 ## Notes
 
 The codebase is currently light on error handling and test coverage is only at 40%.
+
+ReasonDB currently supports Isolation but is not yet ACID compliant; however, there is nothing in the architecture that will prevent it from being so for some storage engines. The first ACID support is likely to be with JSONBlockStore.
 
 
 ## Updates (reverse chronological order)
