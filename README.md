@@ -549,7 +549,7 @@ ReasonDB currently supports Isolation but is not yet ACID compliant; however, th
 
 2016-10-25 v0.0.3 First npm publication.
 
-Prior to being re-named ReasonDB, existed as the first auto-synchronizing in-memory JavaScript object database [JOQULAR](https://github.com/anywhichway/joqular), originally published in April of 2015.
+Prior to being re-named, ReasonDB existed as the first auto-synchronizing in-memory JavaScript object database [JOQULAR](https://github.com/anywhichway/joqular), originally published in April of 2015.
 
 
 ## License
