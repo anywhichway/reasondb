@@ -22,10 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 (function() {
-	let _uuid;
+	let _uuid, fs;
 	if(typeof(window)==="undefined") {
 		let r = require;
 		_uuid = r("node-uuid");
+		fs = r("fs");
 	}
 	
 	/*async function asyncForEach(f) {
@@ -1259,6 +1260,7 @@ SOFTWARE.
 				return this.ready.promised;
 			}
 			this.pending = {};
+			this.data = {};
 		}
 		addScope(value) {
 			let me = this;
@@ -1269,9 +1271,10 @@ SOFTWARE.
 				});
 			}
 		}
-		delete(key,action) {
+		delete(key,action = () => {}) {
 			let me = this,
 				promise = me.pending[key];
+			delete me.data[key];
 			if(!promise) {
 				promise = me.pending[key] = new Promise((resolve,reject) => {
 					me.pending[key] = me.ready().then(() => action());
@@ -1292,16 +1295,24 @@ SOFTWARE.
 				});
 			});
 		}
-		get(key,action) {
+		get(key,action = () => {}) {
 			let me = this,
-				promise = me.pending[key];
+				promise = me.pending[key],
+				result = me.data[key];
+			if(result) {
+				return Promise.resolve(result);
+			}
 			if(!promise) {
 				promise = me.pending[key] = new Promise((resolve,reject) => {
 					me.pending[key] = me.ready().then(() => action());
 					me.pending[key].then((result) => {
 						if(result) {
-							me.restore(result).then((result) => resolve(result));
+							me.restore(result).then((result) => {
+								me.data[key] = result;
+								resolve(result);
+							});
 						} else {
+							delete me.data[key];
 							resolve(result);
 						}
 						delete me.pending[key];
@@ -1314,8 +1325,12 @@ SOFTWARE.
 					me.pending[key] = me.ready().then(() => action());
 					me.pending[key].then((result) => {
 						if(result) {
-							me.restore(result).then((result) => resolve(result));
+							me.restore(result).then((result) => {
+								me.data[key] = result;
+								resolve(result);
+							});
 						} else {
+							delete me.data[key];
 							resolve(result);
 						}
 						delete me.pending[key];
@@ -1462,9 +1477,10 @@ SOFTWARE.
 			}
 			return Promise.resolve(json);
 		}
-		set(key,value,normalize,action) {
+		set(key,value,normalize,action = () => {}) {
 			let me = this,
 				promise = me.pending[key];
+			me.data[key] = value;
 			if(!promise) {
 				promise = me.pending[key] = new Promise((resolve,reject) => {
 					me.pending[key] = me.ready().then(() => action(normalize ? me.normalize(value) : value));
@@ -1717,6 +1733,193 @@ SOFTWARE.
 					}
 				});
 			}));
+		}
+	}
+	function blockString(block,encoding="utf8") {
+		return "[" + bytePadEnd(block[0]+"",20," ",encoding) + "," + bytePadEnd(block[1]+"",20," ",encoding) + "]";
+	}
+
+	function bytePadEnd(str,length,pad,encoding="utf8") {
+		let needed = length - Buffer.byteLength(str,encoding);
+		if(needed>0) {
+			let buffer = Buffer.alloc(needed," ",encoding);
+			return str + buffer.toString(encoding);
+		}
+		return str;
+	}
+
+	class JSONBlockStore extends Store {
+		constructor(name,keyProperty,db,clear) {
+			super(name,keyProperty,db);
+			this.path = db.name + "/" + name;
+			this.encoding = "utf8";
+			this.opened = false;
+			if(clear) {
+				this.clear();
+			}
+		}
+		open() { // also add a transactional file class <file>.json, <file>.queue.json, <file>.<line> (line currently processing), <file>.done.json (lines processed)
+			try {
+				this.freefd = fs.openSync(this.path + "/free.json","r+");
+			} catch(e) {
+				this.freefd = fs.openSync(this.path + "/free.json","w+");
+			}
+			try {
+				this.blocksfd = fs.openSync(this.path + "/blocks.json","r+"); // r+ block offsets and lengths for ids
+			} catch(e) {
+				this.blocksfd = fs.openSync(this.path + "/blocks.json","w+");
+			}
+			try {
+				this.storefd = fs.openSync(this.path + "/store.json","r+"); // the actual data
+			} catch(e) {
+				this.storefd = fs.openSync(this.path + "/store.json","w+");
+			}
+			let free = fs.readFileSync(this.path + "/free.json",this.encoding), // [{start:start,end:end,length:length}[,...]]
+				blocks = fs.readFileSync(this.path + "/blocks.json",this.encoding),  // {<id>:{start:start,end:end,length:length}[,...]}
+				freestat = fs.statSync(this.path + "/free.json"),
+				blocksstat = fs.statSync(this.path + "/blocks.json"),
+				storestat = fs.statSync(this.path + "/store.json");
+			if(free.length===0) {
+				this.free = [];
+			} else {
+				free = free.trim();
+				if(free[0]===",") {
+					free = free.substring(1);
+				}
+				if(free[free.length-1]===",") {
+					free = free.substring(0,free.length-1);
+				}
+				this.free= JSON.parse("["+free+"]");
+			}
+			this.blocks = (blocks.length>0 ? JSON.parse(blocks) : {});
+			this.freeSize = freestat.size;
+			this.blocksSize = blocksstat.size;
+			this.storeSize = storestat.size;
+			this.opened = true;
+			return true;
+		}
+		alloc(length,encoding="utf8") {
+			let me = this,
+				block;
+			if(!me.alloc.size) {
+				me.alloc.size = Buffer.byteLength(blockString([0,0],encoding),encoding);
+				me.alloc.empty = bytePadEnd("null",me.alloc.size," ",encoding);
+			}
+			for(var i=0;i<me.free.length;i++) {
+				block = me.free[i];
+				if(block && block[1]-block[0]>=length) {
+					let position = ((me.alloc.size+1) * i);
+					me.free[i] = null;
+					fs.writeSync(me.freefd,me.alloc.empty,position,encoding);
+					return block;
+				}
+			}
+			let start = (me.storeSize===0 ? 0 : me.storeSize+1);
+			return [start, start+length];
+		}
+		async clear() {
+			if(!this.opened) {
+				this.open();
+			}
+			fs.ftruncateSync(this.freefd);
+			fs.ftruncateSync(this.blocksfd);
+			fs.ftruncateSync(this.storefd);
+			this.freeSize = 0;
+			this.blocksSize = 0;
+			this.storeSize = 0;
+			this.free = [];
+			this.blocks = {};
+		}
+		compress() {
+			let me = this;
+			if(!me.opened) {
+				me.open();
+			}
+			let newfree = [];
+			me.freeSize = 0;
+			me.free.forEach((block,i) => {
+				if(block) {
+					newfree.push(block);
+					let str = blockString(block,me.encoding)+",";
+					fs.writeSync(me.freefd,str,me.freeSize,me.encoding);
+					me.freeSize += Buffer.byteLength(str,me.encoding);
+				}
+			});
+			me.free = newfree;
+			fs.ftruncateSync(me.freefd,me.freeSize);
+			me.blocksSize = 1;
+			me.storeSize = 0;
+			fs.writeSync(me.blocksfd,"{",0,me.encoding);
+			Object.keys(me.blocks).forEach((key,i) => {
+				let str = '"'+key+'":' + JSON.stringify(me.blocks[key])+",";
+				fs.writeSync(me.blocksfd,str,me.blocksSize,me.encoding);
+				me.blocksSize += Buffer.byteLength(str,me.encoding);		
+			});
+			fs.writeSync(me.blocksfd,"}",me.blocksSize-1,me.encoding);
+			fs.ftruncateSync(me.blocksfd,me.blocksSize);
+		}
+		async delete(id) {
+			let me = this;
+			if(!me.opened) {
+				me.open();
+			}
+			let block = me.blocks[id];
+			if(block) {
+				let blanks = bytePadEnd("",block[1]-block[0],me.encoding);
+				delete me.blocks[id];
+				fs.writeSync(me.storefd,blanks,block[0],"utf8"); // write blank padding
+				me.free.push(block);
+				let str = blockString(block,me.encoding)+",";
+				fs.writeSync(me.freefd,str,me.freeSize,me.encoding);
+				me.freeSize += Buffer.byteLength(str,me.encoding);
+				str = (me.blocksSize===0 ? '{' : ',')+'"'+id+'":null}';
+				let fposition = (me.blocksSize===0 ? 0 : me.blocksSize-1);
+				fs.writeSync(me.blocksfd,str,fposition,me.encoding);
+				me.blocksSize = fposition + Buffer.byteLength(str,me.encoding);
+			}
+		}
+		async get(id) {
+			let me = this;
+			if(!me.opened) {
+				me.open();
+			}
+			let block = me.blocks[id];
+			if(block) {
+				let buffer = Buffer.alloc(block[1]-block[0]);
+				fs.readSync(me.storefd,buffer,0,block[1]-block[0],block[0]);
+				let result = JSON.parse(buffer.toString());
+				return super.restore(result.value);
+			}
+		}
+		async set(id,data) {
+			let me = this;
+			if(!me.opened) {
+				me.open();
+			}
+			let str = '{"id":"'+id+'","value":'+JSON.stringify(data)+'}',
+				block = me.blocks[id],
+				blen = Buffer.byteLength(str, 'utf8');
+			if(block) { // if data already stored
+				if((block[0] + blen) - 1 < block[1]) { // and update is same or smaller
+					fs.writeSync(me.storefd,bytePadEnd(str,(block[1]-block[0]),me.encoding),block[0],me.encoding); // write the data with blank padding
+					return;
+				}
+			}
+			let freeblock = me.alloc(blen,me.encoding); // find a free block large enough
+			fs.writeSync(me.storefd,bytePadEnd(str,(freeblock[1]-freeblock[0]),me.encoding),freeblock[0]); // write the data with blank padding
+			me.storeSize = Math.max(freeblock[1],me.storeSize);
+			me.blocks[id] = freeblock; // update the blocks info
+			if(block) { // free old block which was too small, if there was one
+				fs.writeSync(me.storefd,bytePadEnd("",(block[1]-block[0])," "),block[0],me.encoding); // write blank padding
+				me.free.push(block);
+				str = blockString(block,me.encoding)+",";
+				fs.writeSync(me.freefd,str,me.freeSize,me.encoding);
+				me.freeSize += Buffer.byteLength(str,me.encoding);
+			}
+			str = (me.blocksSize===0 ? '{' : ',')+'"'+id+'":'+JSON.stringify(freeblock)+"}";
+			let fposition = (me.blocksSize===0 ? 0 : me.blocksSize-1);
+			fs.writeSync(me.blocksfd,str,fposition,me.encoding);
+			me.blocksSize = fposition + Buffer.byteLength(str,me.encoding);
 		}
 	}
 	class LevelUPStore extends Store {
@@ -2254,6 +2457,7 @@ SOFTWARE.
 	ReasonDB.RedisStore = RedisStore;
 	ReasonDB.MemcachedStore = MemcachedStore;
 	ReasonDB.LevelUPStore = LevelUPStore;
+	ReasonDB.JSONBlockStore = JSONBlockStore;
 	ReasonDB.Activity = Activity;
 	if(typeof(module)!=="undefined") {
 		module.exports = ReasonDB;

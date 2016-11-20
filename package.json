@@ -1,7 +1,7 @@
 {
   "name": "reasondb",
-  "version": "0.1.5",
-  "description": "A 100% JavaScript browser/nodejs database with SQL like syntax, streaming analytics, 18 built-in predicates, in-line fat arrow predicates, predicate extensibility, indexed Dates and Arrays, joins, nested matching, swapable persistence engines in as little as 70K.",
+  "version": "0.1.6",
+  "description": "A 100% JavaScript browser/nodejs object database with SQL like syntax and swapable persistence engines, plus streaming analytics, 18 built-in predicates, in-line fat arrow predicates, predicate extensibility, indexed Dates and Arrays, joins, nested matching in as little as 70K.",
   "main": "lib/index.js",
   "client": "./browser/reasondb.js",
   "reveal": true,
@@ -26,6 +26,7 @@
     "JOQULAR",
     "JSON",
     "database",
+    "Realm",
     "Redis",
     "Memcached",
     "IronCache",

@@ -1,8 +1,8 @@
 # reasondb
 
-A 100% native JavaScript browser or NodeJS database with a SQL like syntax (JOQULAR), JSON projections or live object result sets, asynchronouse cursors, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, swapable persistence engines, built in statistical sampling, and automatic synchronization of object changes into the database and indexes in as little as 70K.
+The first 100% native JavaScript automaticaly synchronizing object database with a SQL like syntax (JOQULAR) and swampable persistence engines for the browser or NodeJS . ReasonDB also supports JSON projections or live object result sets, asynchronouse cursors, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, built in statistical sampling, and configurable unique id properties in as little as 75K.
 
-Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, LevelUP, LocalForage, and IronCache. Or, add your own favoriate store in just an hour (we timed ourselves for Redis and MemCached :-).
+Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, LevelUP, LocalForage, and IronCache. Or, use our super fast JSONBlockStore. Not enough? Add your own favorite store in just an hour (we timed ourselves for Redis and MemCached :-).
 
 [![NPM](https://nodei.co/npm/reasondb.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/reasondb/)
 
@@ -42,7 +42,12 @@ NodeJS 7.x users can use the version in the src directory so long as the --harmo
 
 ### Example
 
-The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however is also supports nested objects, the return of matching JavaScript instances, and streaming analytics. Below are examples of each primary operation supported drawn from code in the `examples/basic/index.js` file:
+The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however is also supports nested objects, the return of matching JavaScript instances, and streaming analytics. 
+
+Unlike other object databases the JavaScipt objects used with ReasonDB do not have to be subclassed from a special root class. You can even use  direct instances of Object! No special calling interfaces are required of the objects to be stored.
+
+
+Below are examples of each primary operation supported drawn from code in the `examples/basic/index.js` file:
 
 ```
 var ReasonDB;
@@ -144,22 +149,24 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>
 
 `<storageType>` - The currently available storage types are listed below. **Note***: For all storage types except MemStrore, LocalStore, and LocalForageStore you will need to install the associated npm packages for production. They are only listed as dev dependencies in the ReasonDB/package.json file. This keeps the primary ReasonDB code smaller.
 
-1) `ReasonDB.MemStore` provides a high-speed in memory database. `<nameOrPath>` is ignored.
+1) `ReasonDB.JSONBlockStore` provides a high-speed server based disk store that can be manually inspected using a regular JavaScript editor.
 
-2) `ReasonBD.LocalStore` uses browser localStorage in Chrome and Firefox. Microsoft Edge just fails. In NodeJS the same API saves to disk with no quota limitations. `<nameOrPath>` is ignored in the browser. On NodeJS, it is a path relative to the execution context of NodeJS.
+2) `ReasonDB.MemStore` provides a high-speed in memory database. `<nameOrPath>` is ignored.
 
-3) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser. In fact, using a remote `ReasonDB.RedisStore` is generally faster. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
+3) `ReasonBD.LocalStore` uses browser localStorage in Chrome and Firefox. Microsoft Edge just fails. In NodeJS the same API saves to disk with no quota limitations. `<nameOrPath>` is ignored in the browser. On NodeJS, it is a path relative to the execution context of NodeJS.
 
-4) `ReasonDB.IronCacheStore` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. Also,
+4) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser. In fact, using a remote `ReasonDB.RedisStore` is generally faster. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
+
+5) `ReasonDB.IronCacheStore` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. Also,
 unit testing has occassional tests that fail due to timing interactions with the iron-cache server, i.e. key updates are not
 complete prior to a request for an updated key originating on the client. It is not clear what causes this, i.e. if the cause is
 in ReasonDB code or the iron-cache architecture.
 
-5) `ReasonDB.RedisStore` - Create your Redis client before creating the database and pass it in as a property `redisClient` in the options object, e.g. `{redisClient: <theClient>}`. `<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration, but Redis values do not expire unless an expiration is specifically set.  ***Note:*** To limit package dependencies, `redis` is a dev dependency not a package dependency. If you wish to use `redis` you should make it part of your app package. 
+6) `ReasonDB.RedisStore` - Create your Redis client before creating the database and pass it in as a property `redisClient` in the options object, e.g. `{redisClient: <theClient>}`. `<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration, but Redis values do not expire unless an expiration is specifically set.  ***Note:*** To limit package dependencies, `redis` is a dev dependency not a package dependency. If you wish to use `redis` you should make it part of your app package. 
 
-6) `ReasonDB.MemcachedStore` - Create your Memcached client before creating the database and pass it in as a property `memcachedClient` in the options object, e.g. `{memcachedClient: <theClient>}`.`<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration.  ***Note:*** To limit package dependencies, `memjs` (the Memcached client) is a dev dependency not a package dependency. If you wish to use `memjs` you should make it part of your app package.
+7) `ReasonDB.MemcachedStore` - Create your Memcached client before creating the database and pass it in as a property `memcachedClient` in the options object, e.g. `{memcachedClient: <theClient>}`.`<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration.  ***Note:*** To limit package dependencies, `memjs` (the Memcached client) is a dev dependency not a package dependency. If you wish to use `memjs` you should make it part of your app package.
 
-7) `ReasonDB.LevelUPStore` - Open your LevelUP database before creating the ReasonDB database and pass it in as a property `levelUPClient` in the options object, e.g. `{levelUPClient: <theDatabase>}`.`<nameOrPath>` is ignored because the name of the database is tied to LevelUP creation.
+8) `ReasonDB.LevelUPStore` - Open your LevelUP database before creating the ReasonDB database and pass it in as a property `levelUPClient` in the options object, e.g. `{levelUPClient: <theDatabase>}`.`<nameOrPath>` is ignored because the name of the database is tied to LevelUP creation.
 
 All storage types are referenced in the example and test files, you just need to provide client creation credentials and change the ReasonDB constructor call to test them out.
  
@@ -477,32 +484,24 @@ An exception to the cross-product based cursor, is a cursor that results from do
 
 ## Performance
 
-Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records.
+Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records. The `select` test does a query but does not resolve data in teh records; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
 
-### Browser
+| Storage                    | insert rec/sec | select rec/sec | read rec/sec | cached select/read rec sec |
+|----------------------------|----------------|----------------|--------------|----------------------------|
+| JSONBlockStore (server)    | 700            | 41,500         | 3,100        | 32,500                     |
+| LocalStore (browser)       | 350            | 22,500         | 1,825        | 55,400                     |
+| LocalStore (server)        | 35             | 13,150         | 1,750        | 29,400                     |
+| LocalForageStore (browser) | 10             | 2,000          | 500          | 45,250                     |
+| LevelUpStore (server)      | 120            | 750            | 375          | 17,150                     |
+| MemStore (browser)         | 4,800          | 46,800         | 46,800       | 46,800                     |
+| MemStore (server)          | 10,100         | 22,700         | 22,700       | 22,700                     |
+| RedisStore (remote)        | 10             | 2,550          | 1,750        | 27,750                     |
+| IronCacheStore (remote)    | 3              | 1,550          | BLOCK/.ERRS  | 41,600                     |
 
-MemStore: 4,100 rec/sec insert, 44,800 rec/sec select, 44,800 rec/sec read, 44,800 rec/sec cached select/read
-
-LocalStore: 645 rec/sec insert, 22,500 rec/sec select, 1,825 rec/sec read, 36,400 rec/sec cached select/read 
-
-LocalForageStore: 10 rec/sec insert, 2,000 rec/sec select, 500 rec/sec read, 45,250 rec/sec cached select/read
-
-### Server
-
-MemStore: 8,500 rec/sec insert, 15,150 rec/sec select, 15,150 rec/sec read, 15,150 rec/sec cached select/read
-
-LocalStore: 35 rec/sec insert, 13,150 rec/sec select, 1,750 rec/sec read, 15,150 rec/sec cached select/read
-
-LevelUPStore: 120 rec/sec insert, 750 rec/sec select, 375 rec/sec read, 15,150 rec/sec cached select/read
-
-RedisStore: 10 rec/sec insert, 2,550 rec/sec select, 1,750 rec/sec read, 27,750 rec/sec cached select/read, (includes remote network latency)
-
-IronCacheStore: 3 rec/sec insert, 1,550 rec/sec select, BLOCKS/ERRS rec/sec read, 41,600 rec/sec cached select/read (includes remote network latency)
-
-The server performance for cached select/read is puzzling. One would expect it to be faster than a browser. However, the version of the
-JavaScript engine in the browsers is newer than that in NodeJS on the server. Alternatively, since IronCache does show better performance,
-there may be a race condition that is not manifested in the browser. Our experienc eis that Promises can behave quite differently in
-terms of sequencing in NodeJS.
+The server performance for cached select/read is puzzling as are the MemStore performance differences between browser and server. 
+One would expect the server to be faster than a browser. However, the version of the JavaScript engine in the browsers 
+is newer than that in NodeJS on the server. Our experience is that Promises can behave quite differently in
+terms of sequencing in NodeJS and blocks may be occuring.
 
 ## Building & Testing
 
@@ -518,6 +517,8 @@ The codebase is currently light on error handling and test coverage is only at 4
 
 
 ## Updates (reverse chronological order)
+
+2016-11-20 v0.1.6 Added JSONBlockStore.
 
 2016-11-15 v0.1.5 Added performance tests in `examples/load` directory.
 
@@ -538,6 +539,8 @@ The codebase is currently light on error handling and test coverage is only at 4
 2016-10-26 v0.0.4 Added documentation. Changed `count` on Cursor instances to a function and added `maxCount` as a data member. Not published to npm.
 
 2016-10-25 v0.0.3 First npm publication.
+
+Prior to being re-named ReasonDB, existed as the first auto-synchronizing in-memory JavaScript object database [JOQULAR](https://github.com/anywhichway/joqular), originally published in April of 2015.
 
 
 ## License
