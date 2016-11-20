@@ -44,9 +44,9 @@ NodeJS 7.x users can use the version in the src directory so long as the --harmo
 
 ### Example
 
-The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however is also supports nested objects, the return of matching JavaScript instances, and streaming analytics. 
+The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however it also supports nested objects, the return of matching JavaScript instances, and streaming analytics. 
 
-Unlike other object databases the JavaScipt objects used with ReasonDB do not have to be subclassed from a special root class. You can even use  direct instances of Object! No special calling interfaces are required of the objects to be stored.
+Unlike other object databases, the JavaScipt objects used with ReasonDB do not have to be subclassed from a special root class. You can even use  direct instances of Object! No special calling interfaces are required of the objects to be stored.
 
 
 Below are examples of each primary operation supported drawn from code in the `examples/basic/index.js` file:
