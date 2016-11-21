@@ -2,7 +2,13 @@
 
 The first 100% native JavaScript automatically synchronizing object database with a SQL like syntax (JOQULAR) and swapable persistence engines for the browser or NodeJS . ReasonDB also supports JSON projections or live object result sets, asynchronous cursors, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, built in statistical sampling, and configurable unique id properties in as little as 75K.
 
-ReasonDB does not require that the class of objects stored be a subclass of any other class, nor does it require objects provide a special calling interface. ReasonDB is probably more compatible with existing object models than any other JSON database.
+ReasonDB does not require that the class of objects stored be a subclass of any other class, nor does it require objects provide a special calling interface. ReasonDB is probably more compatible with existing object models than any other JSON database. All objects inserted to the database are activated, e.g.
+
+```
+let o = {name: "Joe"};
+db.insert(o).exec();
+o.name = "Jo"; // will automatically cause an index and database update
+```
 
 Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, LevelUP, LocalForage, and IronCache. Or, use our super fast JSONBlockStore. Not enough? Add your own favorite store in just an hour (we timed ourselves for Redis and MemCached :-).
 
