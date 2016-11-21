@@ -86,12 +86,12 @@ db.when({$p: {partner: {$neq: null}}}).from({$p: Person}).select().then((cursor)
 		console.log("Updated " + row[0].constructor.name + ":",JSON.stringify(row[0]));
 	});
 });
+
+let p1 = new Person("Joe",new Date("1960-01-16"));
+
 Promise.all([
-				 // Insert Objects into the Person index casting it to a Person as it is inserted.
-	           db.insert({name:"Mary",birthday:new Date("1961-01-15")}).into(Person).exec(),
-	            db.insert({name:"Bill",birthday:new Date("1960-01-16")}).into(Person).exec(),
-	           // Insert a person into the Person index.
-	           db.insert(new Person("Joe",new Date("1961-01-15"))).into(Person).exec(),
+				 // Insert Objects into the Person index casting it to a Person as it is inserted, if not already a Person.
+	           db.insert([{name:"Mary",birthday:new Date("1961-01-15")},{name:"Bill",birthday:new Date("1960-01-16")},p1]).into(Person).exec(),
 	           // Insert an Object that looks like a Person into the Object index.
 	           db.insert({name:"Bill",birthday:new Date("1960-01-16")}).into(Object).exec(),
 	           ]).then(() => {
@@ -121,10 +121,13 @@ Promise.all([
 	        		   db.select().from({$p: Person}).where({$p: {name: {$neq: null}, birthday:{date:14,month:0}}}).exec().then((cursor) => {
 	        			  cursor.forEach((row) => { console.log("Born Jan 15th:",JSON.stringify(row[0])); }); 
 	        		   });
-	        		  // Update the partner for all Persons, the last update will "win"
+	        		   // Just update a predefined Person object after it has been inserted and database/index updates happen automatically
+	        			setTimeout(() => { p1.name = "John"; }); // timeout used so as not to disturb above queries
+	        		  	// Alternatively, use the 'update' command to update based on query criteria, e.g. update the partner for all Persons, the last update will "win"
 	        		   db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec();
-	        	   });
-	           });
+	        			
+	        	 });
+	         });
 ```
 
 Review other files in the example directory or the unit tests under the test directory for more examples. Examples and unit tests can be run in the browser by loading the index.html file. The same examples and tests can be run in node.js by executing the index.js file from the command line, e.g. `node test/index.js`.
@@ -234,7 +237,16 @@ Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$
 
 `db.insert(<object>,...).into(<indexed class>)[.as(<class>)].exec().then(() => { <function body> })`. `then` is chainable as a Promise.
 
-Inserting objects into the database activates them such a way that any subsequent changes to the objects automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store. Inserted objects have a unique v4 uuid as the value for thier key property. The name of the key property is provided when creating a database.
+Inserted objects have a unique v4 uuid as the value for their key property. The name of the key property is provided when creating a database.
+
+Inserting objects into the database activates them such a way that any subsequent changes to the objects automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store. For example, the below code would actually result in an Person with the name "Mary" being stored in the database.
+
+```
+let p1 = new Person("Joe");
+db.insert(p1).exec().then(() => {
+	p1.name = "Mary";
+});
+```
 
 ### Delete
 
@@ -304,6 +316,8 @@ Select statements can join data from across classes in the `where` and `when` cl
  
 
 ### Update
+
+As noted above, single objects already inserted into the database result in automatic data and index updates; however, there is also an `update` command that can be used to base updated on query criteria.
 
 `db.update({<classVariable>: <class>[,...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [,...]} [,...]}).where(<pattern>).exec()`
 
