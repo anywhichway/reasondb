@@ -63,7 +63,7 @@
     "babel-runtime": "^6.11.6",
     "graceful-fs": "^4.1.9",
     "localforage": "^1.4.3",
-    "node-uuid": "^1.4.7",
+    "uuid": "^3.0.0",
     "write-file-atomic": "^1.2.0"
   }
 }
