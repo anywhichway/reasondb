@@ -254,6 +254,8 @@ db.insert(p1).exec().then(() => {
 });
 ```
 
+A future release will support an optional second boolean argument to the `into` subclause indicating to leave inserted objects as passive, which will require they be updated using explict update commands.
+
 ### Delete
 
 `db.delete().from({<classVariable>: <class> [,...]}).where(<pattern>).exec().then((count) => { <function body> })`. `then` is chainable as a Promise. `count` is the number of objects deleted.
@@ -540,7 +542,9 @@ The unit tests and examples can be run on the server in NodeJS by executing just
 
 The codebase is currently light on error handling and test coverage is only at 40%.
 
-ReasonDB currently supports Isolation but is not yet ACID compliant; however, there is nothing in the architecture that will prevent it from being so for some storage engines. The first ACID support is likely to be with JSONBlockStore.
+ReasonDB currently supports Isolation and Durabilty but is not yet ACID compliant; however, there is nothing in the architecture that will prevent it from being so for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which cae it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some tye of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
+
+Currently updates to object properties are automatically updated indepedently; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 
 ## Updates (reverse chronological order)
