@@ -284,7 +284,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       this._metaKeyMap = {};
       this._keys = [];
       this.length = 0;
-      this._bytesInUse = 0
+      this._bytesInUse = 0;
       return this._bytesInUse;
     };
 
