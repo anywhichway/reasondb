@@ -25,7 +25,7 @@ SOFTWARE.
 	let _uuid, fs;
 	if(typeof(window)==="undefined") {
 		let r = require;
-		_uuid = r("node-uuid");
+		_uuid = r("uuid");
 		fs = r("fs");
 	}
 	

@@ -25,10 +25,10 @@ npm install reasondb
 
 ### Loading
 
-Users of Chrome 54.0 and greater can use the file at src/index.js so long as node-uuid is loaded first (67K): 
+Users of Chrome 54.0 and greater can use the file at src/index.js so long as uuid is loaded first (67K): 
 
 ```
-<script src="../node_modules/node-uuid/uuid.js"></script>
+<script src="../node_modules/uuid/uuid.js"></script>
 <script src="../src/index.js"></script>
 ```
 
