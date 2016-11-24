@@ -22,7 +22,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-*/(function(){var _uuid=void 0,fs=void 0;if(typeof window==="undefined"){var r=require;_uuid=r("node-uuid");fs=r("fs");}/*async function asyncForEach(f) {
+*/(function(){var _uuid=void 0,fs=void 0;if(typeof window==="undefined"){var r=require;_uuid=r("uuid");fs=r("fs");}/*async function asyncForEach(f) {
  	let iterable = this;
  	for(var i=0;i<iterable.length;i++) {
  		await f(iterable[i]);
