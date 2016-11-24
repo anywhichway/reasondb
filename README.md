@@ -550,7 +550,7 @@ Currently updates to object properties are automatically updated indepedently; h
 
 ## Updates (reverse chronological order)
 
-2016-11-20 v0.1.8 Documentation updates and code quality improvements.
+2016-11-20 v0.1.8 Documentation updates, code quality improvements updated uuid package to v3.0.0.
 
 2016-11-20 v0.1.7 Documentation updates.
 
