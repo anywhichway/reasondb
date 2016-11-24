@@ -44,7 +44,7 @@ while(data.length<count) {
 }
 let start =  now(),
 	next;
-db.insert(...data).into(Person).exec().then(() => {
+db.insert(...data).into(Person).exec().then((results) => {
 	next = now();
 	console.log("records/sec ", count/((next-start)/1000));
 }).then(() => {

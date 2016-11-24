@@ -25,15 +25,14 @@ npm install reasondb
 
 ### Loading
 
-Users of Chrome 54.0 and greater can use the file at src/index.js so long as uuid is loaded first (67K): 
+Users of Chrome 54.0 and greater can use the file at src/index.js so long as uuid is loaded first (67K). An unmodified, browserified copy of uuid v3.0.0 is provided in the `lib` directory for convenience: 
 
 ```
-<script src="../node_modules/uuid/uuid.js"></script>
+<script src="../lib/uuid.js"></script>
 <script src="../src/index.js"></script>
 ```
 
-A browserified version is located at browser/reasondb.js (203K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note***: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the
-tests and examples are "decafinated" and print to the console rather than the browser page.
+A browserified version of ReasonDB is located at browser/reasondb.js (203K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note***: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the tests and examples are "decafinated" and print to the console rather than the browser page.
 
 ```
 <script src="../browser/reasondb.js"></script>
@@ -161,9 +160,9 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>
 
 `<storageType>` - The currently available storage types are listed below. **Note***: For all storage types except MemStrore, LocalStore, and LocalForageStore you will need to install the associated npm packages for production. They are only listed as dev dependencies in the ReasonDB/package.json file. This keeps the primary ReasonDB code smaller.
 
-1) `ReasonDB.JSONBlockStore` provides a high-speed server based disk store that can be manually inspected using a regular JavaScript editor.
+1) `ReasonDB.JSONBlockStore` provides a high-speed server based disk store for NodeJS that can be manually inspected using a regular JavaScript editor. `<nameOrPath>` is a path relative to the execution context of NodeJS where data should be stored.
 
-2) `ReasonDB.MemStore` provides a high-speed in memory database. `<nameOrPath>` is ignored.
+2) `ReasonDB.MemStore` provides a high-speed in memory database for the browser and NodeJS. `<nameOrPath>` is ignored.
 
 3) `ReasonBD.LocalStore` uses browser localStorage in Chrome and Firefox. Microsoft Edge just fails. In NodeJS the same API saves to disk with no quota limitations. `<nameOrPath>` is ignored in the browser. On NodeJS, it is a path relative to the execution context of NodeJS.
 
@@ -182,9 +181,9 @@ in ReasonDB code or the iron-cache architecture.
 
 All storage types are referenced in the example and test files, you just need to provide client creation credentials and change the ReasonDB constructor call to test them out.
  
-With the exception of LevelUP all data stored in ReasonDB, including indexes, is human readable as JSON directly in the store.
+With the exception of LevelUP, all data stored in ReasonDB, including indexes, is human readable as JSON directly in the store.
  
-See ## Extending ReasonDB for how to add new storage types. 
+See ##Extending ReasonDB for how to add new storage types. 
 
 `clear` - Clear storage when creating the database.
 
@@ -224,9 +223,9 @@ See ## Extending ReasonDB for how to add new storage types.
 
 *$nin* - Tests to see if a value is not in the specified sequence, e.g. `{age:{$nin:[24,25]}}` matches everything except 24 and 25. Types must match.
 
-*$between* - Tests to see if a value is between the first and second elements, e.g. `{age:{$between:[24,25,true]}}`. The flag `true` includes the boundaries in the test. Types must match.
+*$between* - Tests to see if a value is between the first and second elements, e.g. `{age:{$between:[24,25,true]}}`. The flag `true` includes the boundaries in the test. Types must match. Between is unordered, `{age:{$between:[25,24,true]}}` produces the same result.
 
-*$outside* - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match.
+*$outside* - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match. Outside is unordered, `{age:{$outside:[25,24]}}` produces the same result.
 
 See ##Extending ReasonDB to find out how to add your own predicates.
 
@@ -236,17 +235,19 @@ Query patterns take the top level form: `{<classVariable>: {<property>: {<predic
 
 `classVariable` refers to a variable created in a `from` clause, e.g. `{$o1: Object}` creates the variable `$o1`. Variables must start with a `$` sign.
 
-`predicate` can be any of the supported predicates, see Predicates below.
+`predicate` can be any of the supported predicates, see ###Predicates above.
 
-Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age betwen 18 and 20 inclusive in the states of Ohio, Indiana, and Washington.
+Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age between 18 and 20 inclusive in the states of Ohio, Indiana, and Washington. This pattern does the same: `{$o1: {age: {$between: [18,20,true]}, state: {$in: ["OH","IN","WA"]}}`
 
 ### Insert
 
-`db.insert(<object>,...).into(<indexed class>)[.as(<class>)].exec().then(() => { <function body> })`. `then` is chainable as a Promise.
+`db.insert(<object>,...).into(<indexed class>).exec().then((<instanceArray>) => { <function body> })`. `then` is chainable as a Promise.
 
 Inserted objects have a unique v4 uuid as the value for their key property. The name of the key property is provided when creating a database.
 
-Inserting objects into the database activates them such a way that any subsequent changes to the objects automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store. For example, the below code would actually result in an Person with the name "Mary" being stored in the database.
+`<object>`s that are not instances of `<indexed class>` are saved to the database in such a way that when they are retrieved they will be instances of `<indexed class>`. This makes it easy to convert plain objects, e.g. `{name: "Joe"}`. The converted object instances are also resolved as an Array, `<instanceArray>`.
+
+Inserting an object into the database activates it in such a way that any subsequent changes to the object automatically result in updates to the index into which it is inserted as well as automatic saving of the object into the configured persistence store. For example, the below code would actually result in an Person with the name "Mary" being stored in the database.
 
 ```
 let p1 = new Person("Joe");
@@ -255,23 +256,26 @@ db.insert(p1).exec().then(() => {
 });
 ```
 
-A future release will support an optional second boolean argument to the `into` subclause indicating to leave inserted objects as passive, which will require they be updated using explict update commands.
+A future release will support an optional second boolean argument to the `into` subclause indicating inserted objects should be passive. This will require they be updated using explict update commands.
 
 ### Delete
 
 `db.delete().from({<classVariable>: <class> [,...]}).where(<pattern>).exec().then((count) => { <function body> })`. `then` is chainable as a Promise. `count` is the number of objects deleted.
 
-The `from` clause is an object the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
+The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
 See Patterns above for a description of the `where` clause.
 
 Deleting an object from the database removes its unique key and removes it from its index and the persistent store.
 
+Single objects can also be deleted direclty using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
+
+
 ### Select
 
 `db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
 
-A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`, a retriever `get(index)`, and a computational method, `count`. It also has the data element `maxCount`. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided <projection>. All the methods are asynchronous and return Promises. See the ###Cursor documentation for more details.
+A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the ###Cursor documentation for more details.
 
 In order to optimize memory and speed, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the actual number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count`.
 
@@ -281,18 +285,11 @@ A `projection` specification takes the form `{<desiredPropertyName>: {<classVari
 
 `.random(number)` results in a fixed cursor with random N records or all the records if N is greater than the count of all records.
 
-`.sample(confidence,range)` results in a fixed cursor with a `confidence` than the included records are representative of the entire result set at +/- the `range`.
+`.sample(confidence,range)` results in a fixed cursor with a `confidence` that the included records are representative of the entire result set at +/- the `range`.
 
 The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
 See ###Patterns above for a general description of the `where` clause.
-
-
-### When - Streaming Analytics
-
-`db.when(<pattern>).from({<classVariable>: <class>[,...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
-
-Whenever `<pattern>` is matched based on new data being inserted or existing data being changed, the function specified in `then` will be invoked.
 
 #### Projections
 
@@ -321,12 +318,18 @@ Select statements can join data from across classes in the `where` and `when` cl
  
   `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$neq: null}}, $o: {name: {$p: "name}}})`.
   
-  Only two way joins have been tested in the current release v1.x.
+Only two way joins have been tested in the current release v0.x.x.
  
+### When - Streaming Analytics
+
+`db.when(<pattern>).from({<classVariable>: <class>[,...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
+
+Whenever `<pattern>` is matched based on new data being inserted or existing data being changed, the function specified in `then` will be invoked.
+
 
 ### Update
 
-As noted above, single objects already inserted into the database result in automatic data and index updates; however, there is also an `update` command that can be used to base updated on query criteria.
+As noted above, changes to objects already inserted into the database result in automatic data and index updates; however, there is also an `update` command that can be used to base updates on query criteria.
 
 `db.update({<classVariable>: <class>[,...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [,...]} [,...]}).where(<pattern>).exec()`
 
@@ -351,6 +354,8 @@ Alternatively, objects can be retrieved with `.get`, e.g.
 
 `<class>.index.get(uniqeKey).then((object) => { })`
 
+Single objects can  be deleted direclty using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
+
 
 ### Array Matching
 
@@ -370,7 +375,7 @@ All properties equivalent to the get methods on Date objects are indexed, e.g. g
 
 ## Indexing Hidden and Computed Values
 
-ReasonDB supports the indexing of hidden and computed values. Just add an Array called `.indexKeys` as a property on a class and all instances will be indexed by the keys in the array.  `.indexKeys` will also eliminate keys from indexing. If you want to index all enumerable properties plus some functions and hidden properties, then insert an asterisk, `*`, into the array to tell ReasonDB to index all properties in addition to those listed. Below is the ReasonDB definition for `Array`. `Date` is handled in a similar manner.
+ReasonDB supports the indexing of hidden and computed values. Just add an Array called `.indexKeys` as a property on a class and all instances will be indexed by the keys in the array.  `.indexKeys` will also eliminate keys from indexing. If you want to index all enumerable properties plus some function results and hidden properties, then insert an asterisk, `*`, into the array to tell ReasonDB to index all properties in addition to those listed. Below is the ReasonDB definition for `Array`. `Date` is handled in a similar manner.
 
 `Array.indexKeys = ["length","$max","$min","$avg","*"]`
 
@@ -521,8 +526,8 @@ Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz ma
 | LocalStore (server)        | 35             | 13,150         | 1,750        | 29,400                     |
 | LocalForageStore (browser) | 10             | 2,000          | 500          | 45,250                     |
 | LevelUpStore (server)      | 120            | 750            | 375          | 17,150                     |
-| MemStore (browser)         | 4,800          | 46,800         | 46,800       | 46,800                     |
-| MemStore (server)          | 10,100         | 22,700         | 22,700       | 22,700                     |
+| MemStore (browser)         | 3,700          | 54,800         | 54,800       | 54,800                     |
+| MemStore (server)          | 10,100         | 23,700         | 23,700       | 23,700                     |
 | RedisStore (remote)        | 10             | 2,550          | 1,750        | 27,750                     |
 | IronCacheStore (remote)    | 3              | 1,550          | BLOCKS/ERRS  | 41,600                     |
 
@@ -543,16 +548,19 @@ The unit tests and examples can be run on the server in NodeJS by executing just
 
 The codebase is currently light on error handling and test coverage is only at 40%.
 
-ReasonDB currently supports Isolation and Durabilty but is not yet ACID compliant; however, there is nothing in the architecture that will prevent it from being so for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which cae it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some tye of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
+Only two way joins are currently supported.
 
-Currently updates to object properties are automatically updated indepedently; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
+ReasonDB currently supports Isolation and Durabilty but is not yet ACID compliant; however, there is nothing in the architecture that will prevent it from being so for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which cae it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some type of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
 
+Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
 
-2016-11-20 v0.1.9 Documentation updates, code quality improvements.
+2016-11-24 v0.2.1 Updated examples to use `/lib/uuid.js` since the update to v3.0.0 of `uuid` made `uuid` not directly browser loadable. Documentation updates.
 
-2016-11-20 v0.1.8 Documentation updates, code quality improvements updated uuid package to v3.0.0.
+2016-11-23 v0.1.9 Documentation updates, code quality improvements.
+
+2016-11-23 v0.1.8 Documentation updates, code quality improvements updated uuid package to v3.0.0.
 
 2016-11-20 v0.1.7 Documentation updates.
 
@@ -562,7 +570,7 @@ Currently updates to object properties are automatically updated indepedently; h
 
 2016-11-13 v0.1.4 Further optimizations to ensure action sequencing is correct when using a remote datastore. This fixed issues with Redis. Simplified coding to add new persistence stores.
 
-2016-11-02 v0.1.3 Optimizations to help ensure all the actions required to support one change to a data element are complete prior to initiating another on the same element. This involved replacing Promise calls is functions with a passed reference to the resolver for a top level Promise. Added support for multiple arguments for `insert`, `delete`. Added LevelUpStore. Identified an fixed a couple of edge case Promises that contained `this` references. Corrected a join issue that resulted in right sides that were unrestricted for Redis and Memcache was corrected.
+2016-11-02 v0.1.3 Optimizations to help ensure all the actions required to support one change to a data element are complete prior to initiating another on the same element. This involved replacing Promise calls is functions with a passed reference to the resolver for a top level Promise. Added support for multiple arguments for `insert`, `delete`. Added LevelUpStore. Identified an fixed a couple of edge case Promises that contained `this` references. Corrected a join issue that resulted in right sides that were unrestricted for Redis and Memcache.
 
 2016-10-31 v0.1.2 1.1 was pushed with incorrect test case config.
 
@@ -578,7 +586,7 @@ Currently updates to object properties are automatically updated indepedently; h
 
 2016-10-25 v0.0.3 First npm publication.
 
-Prior to being re-named, ReasonDB existed as the first auto-synchronizing in-memory JavaScript object database [JOQULAR](https://github.com/anywhichway/joqular), originally published in April of 2015.
+Prior to being re-named, ReasonDB existed as the first auto-synchronizing in-memory JavaScript object database JOQULAR, originally published in April of 2015.
 
 
 ## License

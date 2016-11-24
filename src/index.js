@@ -105,9 +105,9 @@ SOFTWARE.
 	class Activity {
 		constructor(abort=(()=>{})) {
 			let me = this;
-			this.steps = [];
-			this.results = [];
-			this.abort = (result) => { me.aborted=true; abort(result); };
+			me.steps = [];
+			me.abort = (result) => { me.aborted=true; abort(result); };
+			me.reset();
 		}
 		exec(i=0,value) {
 			if(this.aborted) { return; }
@@ -135,28 +135,34 @@ SOFTWARE.
 					me.complete(i,result);
 					return true;
 				}
-			});	
+			});
+			return me.promise;
 		}
 		reset() {
-			this.results = [];
+			let me = this;
+			me.aborted = false;
+			me.results = [];
+			me.promise = new Promise((resolve,reject) => {
+				me.resolve = resolve;
+				me.reject = reject;
+			});
 		}
 		step(f) {
 			if(f) {
 				this.steps.push(f);
 			}
-			//if(this.steps.length===this.results.length+1) {
-			//	this.exec(this.steps.length-1,this.results[this.results.length-1]);
-			//}
 			return this;
 		}
 		complete(i,result) {
 			let me = this;
-			//if(i===me.results.length) {
-				if(i<me.steps.length-1) {
+			if(i<me.steps.length-1) {
+				if(typeof(result)!=="undefined") {
 					me.results[i] = result;
-					me.exec(i+1,result)
 				}
-			//}
+				me.exec(i+1,result)
+			} else {
+				me.resolve(me.results);
+			}
 		}
 	}
 
@@ -2205,10 +2211,7 @@ SOFTWARE.
 					}
 					return {
 						exec() {
-							let resolver,
-								rejector,
-								promise = new Promise((resolve,reject) => { resolver = resolve; rejector = reject; }),
-								activity = new Activity(resolver);
+							let activity = new Activity();
 							objects.forEach((object,i) => {
 								activity.step(() => {
 										let instance;
@@ -2233,9 +2236,8 @@ SOFTWARE.
 								activity.results.forEach((instance) => {
 									stream(instance,db);
 								});
-								resolver(activity.results);
-							}).exec();
-							return promise;
+							});
+							return activity.exec();
 						}
 					}
 				},

@@ -10,7 +10,7 @@ if(typeof(window)==="undefined") {
 	expect = chai.expect;
 	//Promise = require("bluebird");
 	//Promise.longStackTraces();
-	ReasonDB = require("../lib/index.js");
+	ReasonDB = require("../src/index.js");
 	let levelup = require("levelup");
 	LevelUPClient = levelup; //("./examples/basic/db");
 }
