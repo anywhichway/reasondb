@@ -25,20 +25,20 @@ npm install reasondb
 
 ### Loading
 
-Users of Chrome 54.0 and greater can use the file at src/index.js so long as uuid is loaded first (67K). An unmodified, browserified copy of uuid v3.0.0 is provided in the `lib` directory for convenience: 
+Users of Chrome 54.0 and greater can use the file at src/index.js so long as uuid is loaded first (72K). An unmodified, browserified copy of uuid v3.0.0 is provided in the `lib` directory for convenience: 
 
 ```
 <script src="../lib/uuid.js"></script>
 <script src="../src/index.js"></script>
 ```
 
-A browserified version of ReasonDB is located at browser/reasondb.js (203K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note***: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the tests and examples are "decafinated" and print to the console rather than the browser page.
+A browserified version of ReasonDB is located at browser/reasondb.js (264K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note**: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the tests and examples are "decafinated" and print to the console rather than the browser page.
 
 ```
 <script src="../browser/reasondb.js"></script>
 ```
 
-NodeJS 6.x users can use a smaller Babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (124K): 
+NodeJS 6.x users can use a smaller Babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (135K): 
 
 ```
 require("index.js");
