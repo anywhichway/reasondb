@@ -33,7 +33,7 @@ function decaf() {
 	};
 }
 
-let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore,ReasonDB.IronCacheStore,ReasonDB.RedisStore,ReasonDB.MemcachedStore;
+let store = ReasonDB.MemStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore,ReasonDB.IronCacheStore,ReasonDB.RedisStore,ReasonDB.MemcachedStore,ReasonDB.JSONBlockStore;
 	clear = true,
 	activate = true;
 

@@ -521,20 +521,17 @@ Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz ma
 
 | Storage                    | insert rec/sec | select rec/sec | read rec/sec | cached select/read rec sec |
 |----------------------------|----------------|----------------|--------------|----------------------------|
-| JSONBlockStore (server)    | 700            | 41,500         | 3,100        | 32,500                     |
-| LocalStore (browser)       | 350            | 22,500         | 1,825        | 55,400                     |
+| JSONBlockStore (server)    | 750            | 43,500         | 3,200        | 85,000                     |
+| LocalStore (browser)       | 350            | 22,500         | 1,850        | 55,400                     |
 | LocalStore (server)        | 35             | 13,150         | 1,750        | 29,400                     |
 | LocalForageStore (browser) | 10             | 2,000          | 500          | 45,250                     |
-| LevelUpStore (server)      | 120            | 750            | 375          | 17,150                     |
-| MemStore (browser)         | 3,700          | 54,800         | 54,800       | 54,800                     |
-| MemStore (server)          | 10,100         | 23,700         | 23,700       | 23,700                     |
+| LevelUpStore (server)      | 120            | 1,800          | 1,200        | 17,150                     |
+| MemStore (browser)         | 4,100          | 42,800         | 42,800       | 42,800                     |
+| MemStore (server)          | 10,100         | 75,700         | 75,700       | 75,700                     |
+| RedisStore (server)        | 350            | 21,000         | 950          | 58,000                     |
 | RedisStore (remote)        | 10             | 2,550          | 1,750        | 27,750                     |
 | IronCacheStore (remote)    | 3              | 1,550          | BLOCKS/ERRS  | 41,600                     |
 
-The server performance for cached select/read is puzzling as are the MemStore performance differences between browser and server. 
-One would expect the server to be faster than a browser. However, the version of the JavaScript engine in the browsers 
-is newer than that in NodeJS on the server. Our experience is that Promises can behave quite differently in
-terms of sequencing in NodeJS and blocks may be occuring.
 
 ## Building & Testing
 
@@ -550,13 +547,15 @@ The codebase is currently light on error handling and test coverage is only at 4
 
 Only two way joins are currently supported.
 
-ReasonDB currently supports Isolation and Durabilty but is not yet ACID compliant; however, there is nothing in the architecture that will prevent it from being so for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which cae it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some type of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
+ReasonDB currently supports Isolation and Durabilty but is not yet ACID compliant. However, there is nothing in the architecture that will prevent it from being ACID for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which case it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some type of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
 
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
 
-2016-11-24 v0.2.1 Updated examples to use `/lib/uuid.js` since the update to v3.0.0 of `uuid` made `uuid` not directly browser loadable. Documentation updates.
+2016-11-25 v0.2.02 Introduced the use of `const` producing substantial performance improvements. Tested against local copy of Redis.
+
+2016-11-24 v0.2.01 Updated examples to use `/lib/uuid.js` since the update to v3.0.0 of `uuid` made `uuid` not directly browser loadable. Documentation updates.
 
 2016-11-23 v0.1.9 Documentation updates, code quality improvements.
 

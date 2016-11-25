@@ -37,7 +37,7 @@ function now() {
 	}
 	return Date.now();
 }
-let count = 1000,
+let count = 200,
 	data = [];
 while(data.length<count) {
 	data.push({name:"person"+data.length});
