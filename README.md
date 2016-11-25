@@ -498,7 +498,7 @@ store.set("Person@2",{indentifier: "Mary", age: 21, @key: "Person@2"});
 
 ### Cursors
 
-Cursors are asynchronous to simplify integration with third-party storage engines that may already return data asynchronously. Asynchronous cursors will also simplify the creation of client/server based applications.
+Cursors are asynchronous to simplify integration with third-party storage engines that may already return data asynchronously. Asynchronous cursors also simplify the creation of client/server based applications.
 
 Most ReasonDB cursors do not store all permutations of data required to form a row resulting from a query. Instead, they encapsulate a light-weight cross-product engine that given an offset will assemble the row on the fly. See http://phrogz.net/lazy-cartesian-product. The cross-product engine in ReasonDB can also handle join restrictions.
 
@@ -514,7 +514,7 @@ An exception to the cross-product based cursor, is a cursor that results from do
 
 ## Performance
 
-Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records. The `select` test does a query but does not resolve data in teh records; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
+Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records. The `select` test does a query but does not resolve data in the records, only ids are returned; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
 
 Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz machine with 8GB RAM and fixed hard drives. Numbers provided are the average of 5 runs.
 
@@ -535,7 +535,7 @@ Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz ma
 
 ## Building & Testing
 
-Building, testing and quality assessment are conducted using Travis, Mocha, Chai, Istanbul, Code Climate, and Codacity.
+Building, testing and quality assessment are conducted using Travis, Mocha, Chai, Istanbul, Code Climate, and Codacy.
 
 For code quality assessment purposes, the cyclomatic complexity threshold is set to 10.
 
