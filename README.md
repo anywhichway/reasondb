@@ -553,9 +553,9 @@ Currently updates to object properties are indepedently saved to the database au
 
 ## Updates (reverse chronological order)
 
-2016-11-25 v0.2.02 Introduced the use of `const` producing substantial performance improvements. Tested against local copy of Redis.
+2016-11-25 v0.2.2 Introduced the use of `const` producing substantial performance improvements. Tested against local copy of Redis.
 
-2016-11-24 v0.2.01 Updated examples to use `/lib/uuid.js` since the update to v3.0.0 of `uuid` made `uuid` not directly browser loadable. Documentation updates.
+2016-11-24 v0.2.1 Updated examples to use `/lib/uuid.js` since the update to v3.0.0 of `uuid` made `uuid` not directly browser loadable. Documentation updates.
 
 2016-11-23 v0.1.9 Documentation updates, code quality improvements.
 
