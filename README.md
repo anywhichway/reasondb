@@ -519,19 +519,18 @@ Performance is tested using a single member object in a batch insertion or selec
 Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz machine with 8GB RAM and fixed hard drives. Numbers provided are the average of 5 runs.
 
 
-| Storage                    | insert rec/sec | select rec/sec | read rec/sec | cached select/read rec sec |
-|                            | async/sync     |                |              |                            |
-|----------------------------|----------------|----------------|--------------|----------------------------|
-| JSONBlockStore (server)    | 5,000/750      | 43,500         | 4,000        | 85,000                     |
-| LocalStore (browser)       | 1,750/350      | 22,500         | 1,850        | 55,400                     |
-| LocalStore (server)        | 180/60         | 13,150         | 1,750        | 29,400                     |
-| LocalForageStore (browser) | 10             | 2,000          | 500          | 45,250                     |
-| LevelUpStore (server)      | 120/120        | 1,800          | 1,200        | 17,150                     |
-| MemStore (browser)         | 4,100/4,100    | 42,800         | 42,800       | 42,800                     |
-| MemStore (server)          | 10,100/10,100  | 75,700         | 75,700       | 75,700                     |
-| RedisStore (server)        | 1,000/350      | 21,000         | 2,500        | 58,000                     |
-| RedisStore (remote)        | 12/10          | 2,550          | 1,250        | 27,750                     |
-| IronCacheStore (remote)    | 5/3            | 1,550          | BLOCKS/ERRS  | 41,600                     |
+| Storage                    | insert async/sync | select rec/sec | read rec/sec | cached select/read rec sec |
+|----------------------------|-------------------|----------------|--------------|----------------------------|
+| JSONBlockStore (server)    | 5,000/750         | 43,500         | 4,000        | 85,000                     |
+| LocalStore (browser)       | 1,750/350         | 22,500         | 1,850        | 55,400                     |
+| LocalStore (server)        | 180/60            | 13,150         | 1,750        | 29,400                     |
+| LocalForageStore (browser) | 10                | 2,000          | 500          | 45,250                     |
+| LevelUpStore (server)      | 120/120           | 1,800          | 1,200        | 17,150                     |
+| MemStore (browser)         | 4,100/4,100       | 42,800         | 42,800       | 42,800                     |
+| MemStore (server)          | 10,100/10,100     | 75,700         | 75,700       | 75,700                     |
+| RedisStore (server)        | 1,000/350         | 21,000         | 2,500        | 58,000                     |
+| RedisStore (remote)        | 12/10             | 2,550          | 1,250        | 27,750                     |
+| IronCacheStore (remote)    | 5/3               | 1,550          | BLOCKS/ERRS  | 41,600                     |
 
 
 ## Building & Testing
