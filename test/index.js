@@ -42,7 +42,7 @@ if(store===ReasonDB.LocalForageStore || typeof(window)==="undefined") {
 }
 	
 
-let db = new ReasonDB("./test/db","@key",store,clear,activate,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient,levelUPClient:LevelUPClient}),
+let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:true,ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient,levelUPClient:LevelUPClient}),
 	i = Object.index,
 		promises = [],
 		resolver,

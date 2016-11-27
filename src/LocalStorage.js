@@ -186,9 +186,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         throw new QUOTA_EXCEEDED_ERR();
       }
       try {
-    	  writeSync(filename, valueString, "utf8");
+    	 writeSync(filename, valueString, "utf8");
       } catch(e) {
-    	  fs.writeFileSync(filename, valueString, "utf8"); // above frequently fails on Windows, so try normal write
+    	 fs.writeFileSync(filename, valueString, "utf8"); // above frequently fails on Windows, so try normal write
       }
       if (!existsBeforeSet) {
         metaKey = new MetaKey(encodedKey, (this._keys.push(key)) - 1);

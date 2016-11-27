@@ -14,7 +14,7 @@ if(typeof(window)==="undefined") {
 //Store data using localStorage. In the browser this is window.localStorage and the directory location is ignored.
 //On the server JSON files are created. The first argument `true` forces the creation of new storage and indexes each 
 //time the example is run, the second ensures objects are activated.
-let db = new ReasonDB("./examples/load/db","@key",ReasonDB.MemStore,false,true,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient,levelUPClient:LevelUPClient});
+let db = new ReasonDB("./examples/load/db","@key",ReasonDB.LocalStore,false,true,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient,levelUPClient:LevelUPClient});
 
 
 // Define a Person class. Classes are optional. ReasonDB can store items of type Object, Array, and Date by default.
@@ -42,7 +42,7 @@ let start =  now();
 db.select().from({$p: Person}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
 	cursor.forEach((row) => { }).then(() => {
 		let end = now();
-		console.log("records/sec ", cursor.maxCount/((end-start)/1000));
+		console.log("records ",cursor.maxCount," records/sec ", cursor.maxCount/((end-start)/1000));
 	});
 	
 });

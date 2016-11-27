@@ -160,7 +160,7 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>
 
 `<storageType>` - The currently available storage types are listed below. **Note***: For all storage types except MemStrore, LocalStore, and LocalForageStore you will need to install the associated npm packages for production. They are only listed as dev dependencies in the ReasonDB/package.json file. This keeps the primary ReasonDB code smaller.
 
-1) `ReasonDB.JSONBlockStore` provides a high-speed server based disk store for NodeJS that can be manually inspected using a regular JavaScript editor. `<nameOrPath>` is a path relative to the execution context of NodeJS where data should be stored.
+1) `ReasonDB.JSONBlockStore` provides a high-speed server based disk store for NodeJS that can be manually inspected using a regular JavaScript editor. **Note**: Although the files can be inspected using an editor, they should not be edited. Although the records are legal JSON, they are also stored in fixed length blocks which can be corrupted by editing. `<nameOrPath>` is a path relative to the execution context of NodeJS where data should be stored.
 
 2) `ReasonDB.MemStore` provides a high-speed in memory database for the browser and NodeJS. `<nameOrPath>` is ignored.
 
@@ -189,7 +189,7 @@ See ##Extending ReasonDB for how to add new storage types.
 
 `activate` - Activate objects to automatically update the database and indexes when changed. `false` dooes not currently work but is under development.
 
-`options` - See storage types above for the only current options, which are instantiated storage clients.
+`options` - See storage types above for the only current options, which are instantiated storage clients. Additionally, inserts can be made fasters by setting `{saveIndexAsync:true}` in the options object. When set to true, indexes are only saved during otherwise idle time rather than after each update.
 
 ## JOQULAR - JavaScript Object QUery LAnguage Representation
 
@@ -514,23 +514,24 @@ An exception to the cross-product based cursor, is a cursor that results from do
 
 ## Performance
 
-Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records. The `select` test does a query but does not resolve data in the records, only ids are returned; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
+Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records. When `insert` is async, objects are immediately persisted, but indexes are persisted only during otherwise idle time. The `select` test does a query but does not resolve data in the records, only ids are returned; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
 
 Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz machine with 8GB RAM and fixed hard drives. Numbers provided are the average of 5 runs.
 
 
 | Storage                    | insert rec/sec | select rec/sec | read rec/sec | cached select/read rec sec |
+|                            | async/sync     |                |              |                            |
 |----------------------------|----------------|----------------|--------------|----------------------------|
-| JSONBlockStore (server)    | 750            | 43,500         | 3,200        | 85,000                     |
-| LocalStore (browser)       | 350            | 22,500         | 1,850        | 55,400                     |
-| LocalStore (server)        | 35             | 13,150         | 1,750        | 29,400                     |
+| JSONBlockStore (server)    | 5,000/750      | 43,500         | 4,000        | 85,000                     |
+| LocalStore (browser)       | 1,750/350      | 22,500         | 1,850        | 55,400                     |
+| LocalStore (server)        | 180/60         | 13,150         | 1,750        | 29,400                     |
 | LocalForageStore (browser) | 10             | 2,000          | 500          | 45,250                     |
-| LevelUpStore (server)      | 120            | 1,800          | 1,200        | 17,150                     |
-| MemStore (browser)         | 4,100          | 42,800         | 42,800       | 42,800                     |
-| MemStore (server)          | 10,100         | 75,700         | 75,700       | 75,700                     |
-| RedisStore (server)        | 350            | 21,000         | 950          | 58,000                     |
-| RedisStore (remote)        | 10             | 2,550          | 1,750        | 27,750                     |
-| IronCacheStore (remote)    | 3              | 1,550          | BLOCKS/ERRS  | 41,600                     |
+| LevelUpStore (server)      | 120/120        | 1,800          | 1,200        | 17,150                     |
+| MemStore (browser)         | 4,100/4,100    | 42,800         | 42,800       | 42,800                     |
+| MemStore (server)          | 10,100/10,100  | 75,700         | 75,700       | 75,700                     |
+| RedisStore (server)        | 1,000/350      | 21,000         | 2,500        | 58,000                     |
+| RedisStore (remote)        | 12/10          | 2,550          | 1,250        | 27,750                     |
+| IronCacheStore (remote)    | 5/3            | 1,550          | BLOCKS/ERRS  | 41,600                     |
 
 
 ## Building & Testing
@@ -552,6 +553,8 @@ ReasonDB currently supports Isolation and Durabilty but is not yet ACID complian
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
+
+2016-11-27 v0.2.3 Added `saveIndexAsync:true` as a database startup option. Saves indexes only during idle time, tripling or quadrupling insert speed for locally hosted databases.
 
 2016-11-25 v0.2.2 Introduced the use of `const` producing substantial performance improvements. Tested against local copy of Redis.
 

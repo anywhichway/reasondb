@@ -550,6 +550,7 @@ SOFTWARE.
 		constructor(cls,keyProperty="@key",db,StorageType=(db ? db.storageType : MemStore),clear=(db ? db.clear : false)) {
 			const me = this;
 			cls.index = me;
+			me.saveAsync = db.saveIndexAsync;
 			me.keys = {};
 			me.store = new StorageType(cls.name,keyProperty,db,clear);
 			me.name = cls.name;
@@ -699,7 +700,9 @@ SOFTWARE.
 				indexkey = (this.isInstanceKey(key) ? key : index.name + "." + key),
 				desc = Object.getOwnPropertyDescriptor(index.keys,indexkey);
 			if(desc) {
-				index.keys[key] = false;
+				//index.keys[key] = false;
+				//index.keys[indexkey] = false;
+				delete index.keys[indexkey];
 			}
 		}
 		async get(key,f,init) {
@@ -832,7 +835,6 @@ SOFTWARE.
 													delete node[oldvalue][oldtype][id];
 													restorable = true;
 												}
-												// chaing then. get rid of promises
 												const promise = (first ? Promise.resolve() : store.set(id,instance,true));
 												promise.then(() => { 
 													index.save(key,() => { 
@@ -867,12 +869,18 @@ SOFTWARE.
 											const promise = (first ? Promise.resolve() : store.set(id,instance,true));
 											promise.then(() => { 
 												index.keys[key] = node;
-												index.store.set(index.name + "." + key,node).then(() => {
+												index.save(key,() => {
 													resolve(true);
 													if(!first) {
 														stream(object,db);
 													}
 												});
+												/*index.store.set(index.name + "." + key,node).then(() => {
+													resolve(true);
+													if(!first) {
+														stream(object,db);
+													}
+												});*/
 											}).catch((e) => {
 												delete node[value][type][id];
 												if(restorable) {
@@ -1169,9 +1177,26 @@ SOFTWARE.
 		}
 		async save(key,f) {
 			const index = this,
-				indexkey = (this.isInstanceKey(key) ? key : index.name + "." + key),
-				node = this.keys[indexkey];
+				isinstance = index.isInstanceKey(key),
+				indexkey = (isinstance ? key : index.name + "." + key),
+				node = index.keys[indexkey];
 			if(node) {
+				if(index.saveAsync) {
+					if(f) {
+						f();
+					}
+					if(!index.save.pending) {
+						index.save.pending = {};
+					}
+					if(index.save.pending[indexkey]) {
+						clearTimeout(index.save.pending[indexkey]);
+					}
+					index.save.pending[indexkey] = setTimeout(() => {
+						index.store.set(indexkey,node);
+						delete index.save.pending[indexkey];
+					});
+					return Promise.resolve();
+				}
 				return index.store.set(indexkey,node).then(() => {
 					if(f) {
 						f();
