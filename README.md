@@ -354,32 +354,42 @@ Alternatively, objects can be retrieved with `.get`, e.g.
 
 `<class>.index.get(uniqeKey).then((object) => { })`
 
-Single objects can  be deleted direclty using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
+Single objects can be deleted directly using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
 
 
 ### Array Matching
 
 Arrays are treated like objects for matching, e.g. `{children: {1:"Joe"}}`, matches an object `{children:["Mary","Joe"]}`.
 
-The max, average and min values of all arrays are indexed and can be tested using special predicates:
+The max, average and min values of all arrays are indexed and can be tested using special "predicates" (they are actually indexed properties):
 
-$max - `{sizes: {$max: 5}}` matches `{sizes: [3,5,4,2]}`.
-$avg - `{sizes: {$avg: 3.5}}` matches `{sizes: [3,5,4,2]}`.
-$min - `{sizes: {$min: 2}}` matches `{sizes: [3,5,4,2]}`.
+*$max* - `{sizes: {$max: 5}}` matches `{sizes: [3,5,4,2]}`.
+*$avg* - `{sizes: {$avg: 3.5}}` matches `{sizes: [3,5,4,2]}`.
+*$min* - `{sizes: {$min: 2}}` matches `{sizes: [3,5,4,2]}`.
+
+Normal mathematical tests can also be combined with $max, $min, and $avg, e.g. `{sizes: {$max: {$gt: 4}}}`
+
+Invoking Array modification functions such as `push`, `splice`, etc. forces re-indexing of the modified Array.
 
 ### Date Matching
 
 All properties equivalent to the get methods on Date objects are indexed, e.g. getMonth can be matched as `{month: <some month>}` and getUTCMonth as `{UTCMonth: <some month>}`.
 
+Invokving date modification functions such as `setTime` forces re-indexing of the modified Date.
+
 ## Advanced Use
 
-## Indexing Hidden and Computed Values
+## Indexing Hidden or Computed Values
 
-ReasonDB supports the indexing of hidden and computed values. Just add an Array called `.indexKeys` as a property on a class and all instances will be indexed by the keys in the array.  `.indexKeys` will also eliminate keys from indexing. If you want to index all enumerable properties plus some function results and hidden properties, then insert an asterisk, `*`, into the array to tell ReasonDB to index all properties in addition to those listed. Below is the ReasonDB definition for `Array`. `Date` is handled in a similar manner.
+ReasonDB supports the indexing of hidden and computed values. Just add an Array called `.indexKeys` as a property on a class and all instances will be indexed by the keys in the array.  `.indexKeys` will also eliminate keys from indexing if they are not listed. If you want to index all enumerable properties plus some function results and hidden properties, then insert an asterisk, `*`, into the array to tell ReasonDB to index all properties in addition to those listed. Below is the ReasonDB definition for `Array`. `Date` is handled in a similar manner.
 
 `Array.indexKeys = ["length","$max","$min","$avg","*"]`
 
 ***Note*** Functions must be callable with no arguments or default values for all arguments.
+
+## Skipping Indexing
+
+If you wish to skip indexing certain properties, then add them to a class property called `.skipKeys`. Alternatively, use `.indexKeys` and only list the keys you wish to index.
 
 ## Forcing Reindexing
 
@@ -461,7 +471,7 @@ ReasonDB was designed to:
 
 5) Minimize memory usage by large result sets.
 
-6) Simplify initial development by eliminating the need to make decisions about indexing and updating the database. (Scaling back indexes or eliminating auto-updates are straight-forward to implement and should show up in v2.0).
+6) Simplify initial development by eliminating the need to make decisions about indexing and updating the database. Scaling back indexes is simple, keys to not index can be explicitly listed for a class. Or, classes can be configured to index only specific keys. Eliminating auto-updates is straight-forward to implement and should show up in v2.0.
 
 ### Indexes & Data Storage
 
@@ -519,7 +529,7 @@ Performance is tested using a single member object in a batch insertion or selec
 Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz machine with 8GB RAM and fixed hard drives. Numbers provided are the average of 5 runs.
 
 
-| Storage                    | insert async/sync | select rec/sec | read rec/sec | cached select/read rec sec |
+| Storage                    | insert async/sync | select rec/sec | read rec/sec | cached select/read rec/sec |
 |----------------------------|-------------------|----------------|--------------|----------------------------|
 | JSONBlockStore (server)    | 5,000/750         | 43,500         | 4,000        | 85,000                     |
 | LocalStore (browser)       | 1,750/350         | 22,500         | 1,850        | 55,400                     |
@@ -552,6 +562,8 @@ ReasonDB currently supports Isolation and Durabilty but is not yet ACID complian
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
+
+2016-11-29 v0.2.4 Added `skipKeys` as a class configuration option to prevent indexing of specified properties.
 
 2016-11-27 v0.2.3 Added `saveIndexAsync:true` as a database startup option. Saves indexes only during idle time, tripling or quadrupling insert speed for locally hosted databases.
 

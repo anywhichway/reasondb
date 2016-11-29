@@ -33,7 +33,7 @@ function decaf() {
 	};
 }
 
-let store = ReasonDB.MemStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore,ReasonDB.IronCacheStore,ReasonDB.RedisStore,ReasonDB.MemcachedStore,ReasonDB.JSONBlockStore;
+let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore,ReasonDB.IronCacheStore,ReasonDB.RedisStore,ReasonDB.MemcachedStore,ReasonDB.JSONBlockStore;
 	clear = true,
 	activate = true;
 
@@ -50,7 +50,8 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 			resolver = resolve;
 		}),
 		o1 = {name: "Joe", age:function() { return 24; }, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
-		p1= {name:"Mary",age:21,children:[1,2,3],};
+		p1= {name:"Mary",age:21,children:[1,2,3],skip:1};
+    Object.skipKeys = ["skip"];
 	if(clear) {
 		["Array","Date","Object","Pattern"].forEach((name) => {
 			if(store==ReasonDB.RedisStore) {
@@ -92,6 +93,12 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 promise.then((results) => {
 	describe("test", function() {
 		describe("matches", function() {
+			it('{skip: 1}',function(done) {
+				i.match({skip: 1}).then((results) => {
+					expect(results.length).to.equal(0);
+					done();
+				});
+			});
 			it('{birthday: {month:0}}', function(done) {
 				i.match({birthday: {month:0}}).then((results) => {
 					i.instances(results).then((results) => {
@@ -195,6 +202,18 @@ promise.then((results) => {
 			it('match: {children:{$min:1}}}', function(done) {
 				i.match({children:{$min:1}}).then((result) => {
 					expect(result.length).to.equal(1);
+					done();
+				});
+			});
+			it('match: {children:{$max: {$gt: 2}}}', function(done) {
+				i.match({children:{$max: {$gt: 2}}}).then((result) => {
+					expect(result.length).to.equal(1);
+					done();
+				});
+			});
+			it('match: {children:{$max: {$gt: 3}}}', function(done) {
+				i.match({children:{$max: {$gt: 3}}}).then((result) => {
+					expect(result.length).to.equal(0);
 					done();
 				});
 			});

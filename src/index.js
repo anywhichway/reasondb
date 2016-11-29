@@ -596,6 +596,9 @@ SOFTWARE.
 				indexkeys = Object.keys(object);
 			}
 			return indexkeys.filter((key) => {
+				if(object.constructor.skipKeys && object.constructor.skipKeys.indexOf(key)>=0) {
+					return false;
+				}
 				return key!=="*";
 			});
 		}
