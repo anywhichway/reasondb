@@ -29,31 +29,38 @@ SOFTWARE.
 		fs = r("fs");
 	}
 	
-	/*async function asyncForEach(f) {
-		let iterable = this;
-		for(var i=0;i<iterable.length;i++) {
-			await f(iterable[i]);
+	const asynchronize = async (value) => {
+		if(value instanceof Promise) {
+			return value;
 		}
-		return;
+		return Promise.resolve(value);
 	}
-	async function asyncEvery(f) {
-		let iterable = this;
-		for(var i=0;i<iterable.length;i++) {
-			let result = await f(iterable[i]);
-			if(!result) { return; }
-		}
-		return;
-	}
-	async function asyncSome(f) {
-		let iterable = this;
-		for(var i=0;i<iterable.length;i++) {
-			let result = await f(iterable[i]);
-			if(result) { return; }
-		}
-		return;
-	}*/
 	
-	function wait(object,property,ms=1000,count=1,test) {
+	async function forEachAsync(f) {
+		const iterable = this;
+		for(let i=0;i<iterable.length;i++) {
+			await asynchronize(f(iterable[i]));
+		}
+		return;
+	}
+	async function everyAsync(f) {
+		const iterable = this;
+		for(let i=0;i<iterable.length;i++) {
+			if(!await asynchronize(f(iterable[i]))) { return false; }
+		}
+		return true;
+	}
+	async function someAsync(f) {
+		const iterable = this;
+		for(let i=0;i<iterable.length;i++) {
+			if(await asynchronize(f(iterable[i]))) { return true; }
+		}
+		return false;
+	}
+	
+	
+
+	/*function wait(object,property,ms=1000,count=1,test) {
 		let promises, promise;
 		if(!test) {
 			test = function(value) {
@@ -100,7 +107,7 @@ SOFTWARE.
 		promises.set(test,promise);
 		return promise;
 	}
-	wait.promised = {};
+	wait.promised = {};*/
 	
 	class Activity {
 		constructor(abort=(()=>{})) {
@@ -445,7 +452,28 @@ SOFTWARE.
 			const me = this;
 			if(me.rows) {
 				if(rowNumber<me.maxCount) {
-					return me.rows[rowNumber];
+					let result;
+					if(me.projection) {
+						let instances = me.rows[rowNumber];
+						result = {};
+						if(!Object.keys(me.projection).every((property) => {
+							let colspec = me.projection[property];
+							if(colspec && typeof(colspec)==="object") {
+								let classVar = Object.keys(colspec)[0],
+									key = colspec[classVar],
+									col = me.classVarMap[classVar];
+								if(instances[col]) {
+									result[property] = instances[col][key];
+									return true;
+								}
+							}
+						})) {
+							return undefined;
+						}
+					} else {
+						result = me.rows[rowNumber];
+					}
+					return result;
 				}
 				return undefined; // should we throw an error?
 			}
@@ -2323,51 +2351,13 @@ SOFTWARE.
 											restrictright = {},
 											matchvars = [],
 											activity = new Activity();
-										Object.keys(pattern).forEach((classVar) => {
-											if(!classVars[classVar]) { 
-												return;
-											}
-											if(!classVars[classVar].index) {
-												db.index(classVars[classVar]);
-											}
-											matchvars.push(classVar);
-											activity.step(() => classVars[classVar].index.match(pattern[classVar],classVars,matches,restrictright,classVar));
-										});
-										activity.step(() => {
-											let pass = true;
-											activity.results.every((result,i) => {
-												if(result.length===0) {
-													pass = false;
-												}
-												return pass;
+										if(typeof(pattern)==="function") {
+											const classes = [];
+											Object.keys(classVars).forEach((key) => {
+												classes.push(classVars[key]);
 											});
-											if(!pass) {
-												resolve(new Cursor([],new CXProduct([]),projection,{}),matches);
-											} else {
-												const classes = [],
-													collections = [],
-													promises = [],
-													vars = [],
-													classVarMap = {},
-													filter = (row,index,cxp) => {
-														return row.every((item,i) => {
-															if(!item) {
-																return false;
-															}
-															if(i===0 || !restrictright[i]) {
-																return true;
-															}
-															let prev = row[i-1];
-															return !restrictright[i][prev] || restrictright[i][prev].indexOf(item)>=0;
-														});
-													};
-												Object.keys(classVars).forEach((classVar) => {
-													if(matches[classVar]) {
-														collections.push(matches[classVar]);
-														classes.push(classVars[classVar]);
-													}
-												});
-												const cursor = new Cursor(classes,new CXProduct(collections,filter),projection,classVars);
+											asynchronize(pattern(...classes)).then((rows) => {
+												const cursor = new Cursor(classes,rows,projection,classVars);
 												if(select.firstCount) {
 													cursor.first(select.firstCount).then((rows) => {
 														resolve(new Cursor(classes,rows));
@@ -2381,11 +2371,74 @@ SOFTWARE.
 														resolve(new Cursor(classes,rows));
 													});
 												} else {
-													resolve(cursor,matches);
+													resolve(cursor); // ,matches
 												}
-												return null;
-											}
-										}).exec();
+											});
+										} else {
+											Object.keys(pattern).forEach((classVar) => {
+												if(!classVars[classVar]) { 
+													return;
+												}
+												if(!classVars[classVar].index) {
+													db.index(classVars[classVar]);
+												}
+												matchvars.push(classVar);
+												activity.step(() => classVars[classVar].index.match(pattern[classVar],classVars,matches,restrictright,classVar));
+											});
+											activity.step(() => {
+												let pass = true;
+												activity.results.every((result,i) => {
+													if(result.length===0) {
+														pass = false;
+													}
+													return pass;
+												});
+												if(!pass) {
+													resolve(new Cursor([],new CXProduct([]),projection,{}),matches);
+												} else {
+													const classes = [],
+														collections = [],
+														promises = [],
+														vars = [],
+														classVarMap = {},
+														filter = (row,index,cxp) => {
+															return row.every((item,i) => {
+																if(!item) {
+																	return false;
+																}
+																if(i===0 || !restrictright[i]) {
+																	return true;
+																}
+																let prev = row[i-1];
+																return !restrictright[i][prev] || restrictright[i][prev].indexOf(item)>=0;
+															});
+														};
+													Object.keys(classVars).forEach((classVar) => {
+														if(matches[classVar]) {
+															collections.push(matches[classVar]);
+															classes.push(classVars[classVar]);
+														}
+													});
+													const cursor = new Cursor(classes,new CXProduct(collections,filter),projection,classVars);
+													if(select.firstCount) {
+														cursor.first(select.firstCount).then((rows) => {
+															resolve(new Cursor(classes,rows));
+														});
+													} else if(select.randomCount) {
+														cursor.random(select.randomCount).then((rows) => {
+															resolve(new Cursor(classes,rows));
+														});
+													} else if(select.sampleSpec) {
+														cursor.sample(select.sampleSpec.confidence,select.sampleSpec.range).then((rows) => {
+															resolve(new Cursor(classes,rows));
+														});
+													} else {
+														resolve(cursor,matches);
+													}
+													return null;
+												}
+											}).exec();
+										}
 									});
 								}
 							}

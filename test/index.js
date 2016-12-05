@@ -354,6 +354,25 @@ promise.then((results) => {
 			});
 		});
 		describe("queries (all match criteria above also supported)", function() {
+			it('db.select().from({$e1: Object}).where((cls1) => { return [[{name:"Joe",age:24}]]})', function(done) {
+				db.select().from({$e1: Object}).where((cls1) => { return [[{name:"Joe",age:24}]]}).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(1);
+					cursor.get(0).then((row) => {
+						expect(row[0].name).to.equal("Joe");
+						done(); 
+					});
+				});
+			});
+			it('db.select({name: {$e1: "name"}}).from({$e1: Object}).where((cls1) => { return [[{name:"Joe",age:24}]]})', function(done) {
+				db.select({name: {$e1: "name"}}).from({$e1: Object}).where((cls1) => { return [[{name:"Joe",age:24}]]}).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(1);
+					cursor.get(0).then((row) => {
+						console.log(row)
+						expect(row.name).to.equal("Joe");
+						done(); 
+					});
+				});
+			});
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).exec().then((cursor) => { 
 					expect(cursor.maxCount).to.equal(2); 
