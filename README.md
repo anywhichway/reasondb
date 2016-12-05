@@ -57,7 +57,7 @@ Unlike other object databases, the JavaScipt objects used with ReasonDB do not h
 
 Below are examples of each primary operation supported drawn from code in the `examples/basic/index.js` file:
 
-```
+```javascript
 var ReasonDB;
 if(typeof(window)==="undefined") {
 	ReasonDB = require("../../lib/index.js"); // Load ReasonDB if running on the server.
