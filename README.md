@@ -27,20 +27,20 @@ npm install reasondb
 
 Users of Chrome 54.0 and greater can use the file at src/index.js so long as uuid is loaded first (72K). An unmodified, browserified copy of uuid v3.0.0 is provided in the `lib` directory for convenience: 
 
-```
+```javascript
 <script src="../lib/uuid.js"></script>
 <script src="../src/index.js"></script>
 ```
 
 A browserified version of ReasonDB is located at browser/reasondb.js (264K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note**: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the tests and examples are "decafinated" and print to the console rather than the browser page.
 
-```
+```javascript
 <script src="../browser/reasondb.js"></script>
 ```
 
 NodeJS 6.x users can use a smaller Babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (135K): 
 
-```
+```javascript
 require("index.js");
 ```
 
@@ -197,7 +197,7 @@ ReasonDB supports both a pattern based query mechanism using the predicates belo
 
 ### Predicates
 
-*$* - Inline test, e.g. `{age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}`.
+*$* - Inline test, e.g. ```javascript {age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}```.
 
 *$typeof* - Ensures the value in a property is of the type specified, e.g. `{id: {$typeof: "number"}}`.
 
@@ -522,7 +522,7 @@ The cross-product approach has two values:
 
 2) A result set can be returned faster.
 
-As side effect of the above is that it is not currently possible to know the actual number of rows in a cursor without doing additional computation to determine which rows are excluded as a result of join restrictions.
+A side effect of the above is that it is not currently possible to know the actual number of rows in a cursor without doing additional computation to determine which rows are excluded as a result of join restrictions.
 
 An exception to the cross-product based cursor, is a cursor that results from down selection. The select clauses `first`, `random`, `sample`, result in the return of cursors with fixed pre-computed rows. However, the calling interface is identical. In fact, the same class is used to implement both types of cursor.
 
