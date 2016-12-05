@@ -197,7 +197,7 @@ ReasonDB supports both a pattern based query mechanism using the predicates belo
 
 ### Predicates
 
-*$* - Inline test, e.g. ```javascript {age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}```.
+*$* - Inline test, e.g. `{age:{$:(value)=> { return typeof(value)==="number" && value>=21; }}}`.
 
 *$typeof* - Ensures the value in a property is of the type specified, e.g. `{id: {$typeof: "number"}}`.
 
