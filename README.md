@@ -187,7 +187,7 @@ All storage types are referenced in the example and test files, you just need to
  
 With the exception of LevelUP, all data stored in ReasonDB, including indexes, is human readable as JSON directly in the store.
  
-See [Extending ReasonDB](#extending) for how to add new storage types. 
+See [Extending ReasonDB](#extending) for how to [add new storage types](#addStorage). 
 
 `clear` - Clear storage when creating the database.
 
@@ -233,8 +233,9 @@ ReasonDB supports both a pattern based query mechanism using the predicates belo
 
 *$outside* - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match. Outside is unordered, `{age:{$outside:[25,24]}}` produces the same result.
 
-See ##Extending ReasonDB to find out how to add your own predicates.
+See [Extending ReasonDB](#extending) to find out how to [add your own predicates](#addPredicates).
 
+<a name="patterns"></a>
 ### Patterns
 
 Query patterns take the top level form: `{<classVariable>: {<property>: {<predicate>: <value> [,...]} [,...]} [,...]}`.
@@ -276,12 +277,12 @@ Deleting an object from the database removes its unique key and removes it from 
 
 Single objects can also be deleted direclty using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
 
-
+<a name="select></a>
 ### Select
 
-`db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>|<function>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
+`db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>|<function>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a [Cursor](#cursors).
 
-A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the ###Cursor documentation for more details.
+A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the [Cursors](#cursors)  documentation for more details.
 
 In order to optimize memory and speed, except in the case of functional queries, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the actual number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count()`.
 
@@ -295,7 +296,7 @@ A `projection` specification takes the form `{<desiredPropertyName>: {<classVari
 
 The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
-See ###Patterns above for a general description of `<pattern>` in the `where` clause.
+See [Patterns](#patterns) above for a general description of `<pattern>` in the `where` clause.
 
 To create a functional query, provide `<function>` in the `where` clause rather than `<pattern>`. The function must return an an array of rows of objects, i.e. array of arrays. The column order of the row arrays should match that of the passed in classes. ReasonDB continues to manage projections and statistical sampling or row count limits. The function will be passed all the classes named in the `from` clause. The class indecies can be accessed from within the query function, or the program can use its own mechanisms for keeping track of instances.
 
@@ -405,9 +406,10 @@ Sometimes it may be necessary to force a re-index of an object based on changes 
 
 `Array.reindexCalls = ["push","pop","splice","reverse","fill","shift","unshift"]`
 
+<a name="extending"></a>
+## Extending ReasonDB
 
-## Extending ReasonDB<a name="extending"></a>
-
+<a name="addPredicates"></a>
 ### Adding Predicates
 
 Adding predicates can be done in as little as one line of code!
@@ -418,7 +420,8 @@ Here is the definition of the RegExp predicate:
 
 Just choose a predicate name, it must start with a `$`, and add it as a class property to `Index` with the value being a boolean function taking two arguments. The first argument will be the value stored in the index, the second value will be the value extracted from the patterns used in `where` and `when` clauses of JOQULAR qeuries. The first value will always be a primitive, i.e. `number`, `string`, or `boolean`.
 
-### Adding Persistence Engines
+<a name="addStorage"></a>
+### Adding Storage Types and Persistence Engines
 
 Adding a persistence engine takes between 5 and 7 methods. A template is below:
 
@@ -513,12 +516,12 @@ store.set("Person@1",{indentifier: "Joe", age: 21, @key: "Person@1"});
 store.set("Person@3",{indentifier: "Joe", age: 24, @key: "Person@3"});
 store.set("Person@2",{indentifier: "Mary", age: 21, @key: "Person@2"});
 ```
-
+<a name="cursors"></a>
 ### Cursors
 
-Cursors are asynchronous to simplify integration with third-party storage engines that may already return data asynchronously. Asynchronous cursors also simplify the creation of client/server based applications.
+Cursors are yielded to the `then` portion of a [select](#select). Cursors are asynchronous to simplify integration with third-party storage engines that may already return data asynchronously. Asynchronous cursors also simplify the creation of client/server based applications.
 
-Most ReasonDB cursors do not store all permutations of data required to form a row resulting from a query. Instead, they encapsulate a light-weight cross-product engine that given an offset will assemble the row on the fly. See http://phrogz.net/lazy-cartesian-product. The cross-product engine in ReasonDB can also handle join restrictions.
+Most ReasonDB cursors do not store all permutations of data required to form a row resulting from a query. Instead, they encapsulate a light-weight cross-product engine that given an offset will assemble the row on the fly. See [Lazy Cartesian Product](http://phrogz.net/lazy-cartesian-product). The cross-product engine in ReasonDB can also handle join restrictions.
 
 The cross-product approach has two values:
 
@@ -565,7 +568,7 @@ The codebase is currently light on error handling and test coverage is only at 4
 
 Only two way joins are currently supported.
 
-ReasonDB currently supports Isolation and Durabilty but is not yet ACID compliant. However, there is nothing in the architecture that will prevent it from being ACID for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which case it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some type of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
+ReasonDB currently supports Isolation and Durabilty but is not yet [ACID compliant](https://en.wikipedia.org/wiki/ACID). However, there is nothing in the architecture that will prevent it from being ACID for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which case it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some type of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
 
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
