@@ -282,17 +282,9 @@ Single objects can also be deleted direclty using `<class>.index.delete(<object 
 <a name="select></a>
 ### Select
 
-<<<<<<< HEAD
 `db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>|<function>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a [Cursor](#cursors).
-=======
-`db.select([<projection>])[.first(number) | .random(number) | .sample(confidence, range)].from({<classVariable>: <class>[, ...]}).where(<pattern>|<function>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
->>>>>>> refs/remotes/origin/master
 
-<<<<<<< HEAD
 A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the [Cursors](#cursors)  documentation for more details.
-=======
-A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row, rowNumber, cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the ###Cursor documentation for more details.
->>>>>>> refs/remotes/origin/master
 
 In order to optimize memory and speed, except in the case of functional queries, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the actual number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count()`.
 
