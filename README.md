@@ -14,6 +14,10 @@ o.name = "Jo"; // will automatically cause an index and database update
 
 Add JOQULAR query capability, joins, and streaming analytics to popular back-end stores including file systems, Redis, Memcached, LevelUP, LocalForage, and IronCache. Or, use our super fast JSONBlockStore. Not enough? Add your own favorite store in just an hour (we timed ourselves for Redis and MemCached :-).
 
+If ReasonDB does not have a feature you want, you can [review and vote on enhancements](https://github.com/anywhichway/reasondb/issues?utf8=%E2%9C%93&q=is%3Aissue%20is%3Aopen%20is%3Aenhancement).
+
+
+
 [![NPM](https://nodei.co/npm/reasondb.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/reasondb/)
 
 
@@ -183,7 +187,7 @@ All storage types are referenced in the example and test files, you just need to
  
 With the exception of LevelUP, all data stored in ReasonDB, including indexes, is human readable as JSON directly in the store.
  
-See ##Extending ReasonDB for how to add new storage types. 
+See [Extending ReasonDB](#extending) for how to add new storage types. 
 
 `clear` - Clear storage when creating the database.
 
@@ -402,7 +406,7 @@ Sometimes it may be necessary to force a re-index of an object based on changes 
 `Array.reindexCalls = ["push","pop","splice","reverse","fill","shift","unshift"]`
 
 
-## Extending ReasonDB
+## Extending ReasonDB<a name="extending"></a>
 
 ### Adding Predicates
 
