@@ -64,7 +64,7 @@ Below are examples of each primary operation supported drawn from code in the `e
 ```javascript
 var ReasonDB;
 if(typeof(window)==="undefined") {
-	ReasonDB = require("../../lib/index.js"); // Load ReasonDB if running on the server.
+  ReasonDB = require("../../lib/index.js"); // Load ReasonDB if running on the server.
 }
 
 // Create a database at the directory location provided using @key as the primary key on all objects.
@@ -72,72 +72,74 @@ if(typeof(window)==="undefined") {
 // On the server JSON files are created in the directory. The argument `true` forces the creation of new storage 
 // and indexes each time the example is run.
 
-let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true);
+let db = new ReasonDB("./examples/basic/db", "@key", ReasonDB.LocalStore, true);
 
 // Define a Person class. Classes are optional. ReasonDB can store items of type Object, Array, and Date by default.
 // There is no need to tell the database about the class, it will be auto-indexed as soon as attempt is made to insert
 // an instance.
 class Person {
-	constructor(name,birthday) {
-		this.name = name;
-		this.birthday = birthday;
-	}
+  constructor(name, birthday) {
+    this.name = name;
+    this.birthday = birthday;
+  }
 }
 
 // Create a streaming analytics rule that fires every time a Person is added to the database.
 db.when({$p: {name: {$neq: null}, partner: undefined}}).from({$p: Person}).select().then((cursor) => { 
-	cursor.forEach((row) => {
-		console.log("New " + row[0].constructor.name + ":",JSON.stringify(row[0]));
-	});
+  cursor.forEach((row) => {
+    console.log("New " + row[0].constructor.name + ":", JSON.stringify(row[0]));
+  });
 });
+
 //Create a streaming analytics rule that fires every time a Person is updated with a partner.
 db.when({$p: {partner: {$neq: null}}}).from({$p: Person}).select().then((cursor) => { 
-	cursor.forEach((row) => {
-		console.log("Updated " + row[0].constructor.name + ":",JSON.stringify(row[0]));
-	});
+  cursor.forEach((row) => {
+    console.log("Updated " + row[0].constructor.name + ":", JSON.stringify(row[0]));
+  });
 });
 
-let p1 = new Person("Joe",new Date("1960-01-16"));
+let p1 = new Person("Joe", new Date("1960-01-16"));
 
 Promise.all([
-				 // Insert Objects into the Person index casting it to a Person as it is inserted, if not already a Person.
-	           db.insert([{name:"Mary",birthday:new Date("1961-01-15")},{name:"Bill",birthday:new Date("1960-01-16")},p1]).into(Person).exec(),
-	           // Insert an Object that looks like a Person into the Object index.
-	           db.insert({name:"Bill",birthday:new Date("1960-01-16")}).into(Object).exec(),
-	           ]).then(() => {
-	           	// Delete a Person from the database where the name is "Joe". This will not match the Object
-	           	// that looks like a person. It will only match one object, the Joe that is a Person.
-	        	   db.delete().from({$p: Person}).where({$p: {name: "Joe"}}).exec().then((result) => {
-	        		   console.log("Deleted:",result);
-	        	   }).then(() => {
-	        	   		// Select and print Person's with non-null names. There will be two.
-	        		   db.select().from({$p: Person}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
-	        			  cursor.forEach((row) => { console.log("Person",JSON.stringify(row[0])); }); 
-	        		   });
-	        		   // Select and print Objects with non-null names. There will be three since Person's are instances of Objects
-	        		   // and are stored in the Object index.
-	        		   db.select().from({$p: Object}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
-	        			  cursor.forEach((row) => { console.log("Object",JSON.stringify(row[0])); }); 
-	        		   });
-	        		   // Print all possible pairs of Person not paired with themselves. There will be two, Mary and Bill plus Bill and Mary.
-	        		   db.select().from({$p1: Person, $p2: Person}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec().then((cursor) => {
-		        			  cursor.forEach((row) => { console.log("Pair:",JSON.stringify(row[0]),JSON.stringify(row[1])); }); 
-		        	   });
-		        	   // Print all possible pairs of Person paired to named Objects with the same name and birthday. There will be one Bill.
-	        		   db.select().from({$p: Person, $o: Object}).where({$p: {name: {$o: "name"}, birthday: {time: {$o: "time"}}}).exec().then((cursor) => {
-		        			  cursor.forEach((row) => { console.log("Pair:",JSON.stringify(row[0]),JSON.stringify(row[1])); }); 
-		        	   });
-		        	   // Select a Person born on January 15th regardless of year.
-	        		   db.select().from({$p: Person}).where({$p: {name: {$neq: null}, birthday:{date:14,month:0}}}).exec().then((cursor) => {
-	        			  cursor.forEach((row) => { console.log("Born Jan 15th:",JSON.stringify(row[0])); }); 
-	        		   });
-	        		   // Just update a predefined Person object after it has been inserted and database/index updates happen automatically
-	        			setTimeout(() => { p1.name = "John"; }); // timeout used so as not to disturb above queries
-	        		  	// Alternatively, use the 'update' command to update based on query criteria, e.g. update the partner for all Persons, the last update will "win"
-	        		   db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec();
-	        			
-	        	 });
-	         });
+    // Insert Objects into the Person index casting it to a Person as it is inserted, if not already a Person.
+    db.insert([{name:"Mary", birthday:new Date("1961-01-15")}, {name:"Bill", birthday:new Date("1960-01-16")}, p1]).into(Person).exec(),
+    
+    // Insert an Object that looks like a Person into the Object index.
+    db.insert({name:"Bill", birthday:new Date("1960-01-16")}).into(Object).exec(),
+  ]).then(() => {
+    // Delete a Person from the database where the name is "Joe". This will not match the Object
+    // that looks like a person. It will only match one object, the Joe that is a Person.
+    db.delete().from({$p: Person}).where({$p: {name: "Joe"}}).exec().then((result) => {
+    console.log("Deleted:", result);
+  }).then(() => {
+    // Select and print Person's with non-null names. There will be two.
+    db.select().from({$p: Person}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
+    cursor.forEach((row) => { console.log("Person", JSON.stringify(row[0])); }); 
+  });
+    // Select and print Objects with non-null names. There will be three since Person's are instances of Objects
+    // and are stored in the Object index.
+    db.select().from({$p: Object}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
+    cursor.forEach((row) => { console.log("Object", JSON.stringify(row[0])); }); 
+  });
+    // Print all possible pairs of Person not paired with themselves. There will be two, Mary and Bill plus Bill and Mary.
+    db.select().from({$p1: Person, $p2: Person}).where({$p1: {name: {$neq: null}, "@key": {$neq: {$p2: "@key"}}}}).exec().then((cursor) => {
+    cursor.forEach((row) => { console.log("Pair:", JSON.stringify(row[0]), JSON.stringify(row[1])); }); 
+  });
+    // Print all possible pairs of Person paired to named Objects with the same name and birthday. There will be one Bill.
+    db.select().from({$p: Person, $o: Object}).where({$p: {name: {$o: "name"}, birthday: {time: {$o: "time"}}}).exec().then((cursor) => {
+    cursor.forEach((row) => { console.log("Pair:", JSON.stringify(row[0]), JSON.stringify(row[1])); }); 
+  });
+    // Select a Person born on January 15th regardless of year.
+    db.select().from({$p: Person}).where({$p: {name: {$neq: null}, birthday:{date:14, month:0}}}).exec().then((cursor) => {
+    cursor.forEach((row) => { console.log("Born Jan 15th:", JSON.stringify(row[0])); }); 
+  });
+    // Just update a predefined Person object after it has been inserted and database/index updates happen automatically
+    setTimeout(() => { p1.name = "John"; }); // timeout used so as not to disturb above queries
+    
+    // Alternatively, use the 'update' command to update based on query criteria, e.g. update the partner for all Persons, the last update will "win"
+    db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null}, "@key": {$neq: {$p2: "@key"}}}}).exec();
+  });
+});
 ```
 
 Review other files in the example directory or the unit tests under the test directory for more examples. Examples and unit tests can be run in the browser by loading the index.html file. The same examples and tests can be run in node.js by executing the index.js file from the command line, e.g. `node test/index.js`.
@@ -156,7 +158,7 @@ The notation below uses the following conventions:
 
 ## Creating A Database
 
-The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>","<uniqueKeyName>"="@key",<storageType>,clear=false,activate=true,{<options>}={})`
+The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>", "<uniqueKeyName>"="@key", <storageType>, clear=false, activate=true, {<options>}={})`
 
 `<nameOrPath>` - See storage types below for use.
 
@@ -225,30 +227,30 @@ ReasonDB supports both a pattern based query mechanism using the predicates belo
 
 *$matches* - Implements RegExp matching, e.g. `{name:{$matches: <RegExp>}}`. RegExp can either be a regular expression using shorthand notation, or a string that looks like a regular expression, i.e starts and ends with `/`.
 
-*$in* - Tests to see if a value is in the specified sequence, e.g. `{age:{$in:[24,25]}}` only matches 24 and 25. Types must match.
+*$in* - Tests to see if a value is in the specified sequence, e.g. `{age:{$in:[24, 25]}}` only matches 24 and 25. Types must match.
 
-*$nin* - Tests to see if a value is not in the specified sequence, e.g. `{age:{$nin:[24,25]}}` matches everything except 24 and 25. Types must match.
+*$nin* - Tests to see if a value is not in the specified sequence, e.g. `{age:{$nin:[24, 25]}}` matches everything except 24 and 25. Types must match.
 
-*$between* - Tests to see if a value is between the first and second elements, e.g. `{age:{$between:[24,25,true]}}`. The flag `true` includes the boundaries in the test. Types must match. Between is unordered, `{age:{$between:[25,24,true]}}` produces the same result.
+*$between* - Tests to see if a value is between the first and second elements, e.g. `{age:{$between:[24, 25, true]}}`. The flag `true` includes the boundaries in the test. Types must match. Between is unordered, `{age:{$between:[25, 24, true]}}` produces the same result.
 
-*$outside* - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24,25]}}`. Types must match. Outside is unordered, `{age:{$outside:[25,24]}}` produces the same result.
+*$outside* - Tests to see if a value is outside the first and second elements, e.g. `{age:{$outside:[24, 25]}}`. Types must match. Outside is unordered, `{age:{$outside:[25, 24]}}` produces the same result.
 
 See [Extending ReasonDB](#extending) to find out how to [add your own predicates](#addPredicates).
 
 <a name="patterns"></a>
 ### Patterns
 
-Query patterns take the top level form: `{<classVariable>: {<property>: {<predicate>: <value> [,...]} [,...]} [,...]}`.
+Query patterns take the top level form: `{<classVariable>: {<property>: {<predicate>: <value> [, ...]} [, ...]} [, ...]}`.
 
 `classVariable` refers to a variable created in a `from` clause, e.g. `{$o1: Object}` creates the variable `$o1`. Variables must start with a `$` sign.
 
 `predicate` can be any of the supported predicates, see ###Predicates above.
 
-Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH","IN","WA"]}}` matches all objects with age between 18 and 20 inclusive in the states of Ohio, Indiana, and Washington. This pattern does the same: `{$o1: {age: {$between: [18,20,true]}, state: {$in: ["OH","IN","WA"]}}`
+Continuing with the `$o1` variable: `{$o1: {age: {$gte: 18, $lte: 20}, state: {$in: ["OH", "IN", "WA"]}}` matches all objects with age between 18 and 20 inclusive in the states of Ohio, Indiana, and Washington. This pattern does the same: `{$o1: {age: {$between: [18, 20, true]}, state: {$in: ["OH", "IN", "WA"]}}`
 
 ### Insert
 
-`db.insert(<object>,...).into(<indexed class>).exec().then((<instanceArray>) => { <function body> })`. `then` is chainable as a Promise.
+`db.insert(<object>, ...).into(<indexed class>).exec().then((<instanceArray>) => { <function body> })`. `then` is chainable as a Promise.
 
 Inserted objects have a unique v4 uuid as the value for their key property. The name of the key property is provided when creating a database.
 
@@ -259,7 +261,7 @@ Inserting an object into the database activates it in such a way that any subseq
 ```
 let p1 = new Person("Joe");
 db.insert(p1).exec().then(() => {
-	p1.name = "Mary";
+  p1.name = "Mary";
 });
 ```
 
@@ -267,7 +269,7 @@ A future release will support an optional second boolean argument to the `into` 
 
 ### Delete
 
-`db.delete().from({<classVariable>: <class> [,...]}).where(<pattern>).exec().then((count) => { <function body> })`. `then` is chainable as a Promise. `count` is the number of objects deleted.
+`db.delete().from({<classVariable>: <class> [, ...]}).where(<pattern>).exec().then((count) => { <function body> })`. `then` is chainable as a Promise. `count` is the number of objects deleted.
 
 The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
@@ -280,19 +282,27 @@ Single objects can also be deleted direclty using `<class>.index.delete(<object 
 <a name="select></a>
 ### Select
 
+<<<<<<< HEAD
 `db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>|<function>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a [Cursor](#cursors).
+=======
+`db.select([<projection>])[.first(number) | .random(number) | .sample(confidence, range)].from({<classVariable>: <class>[, ...]}).where(<pattern>|<function>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a Cursor.
+>>>>>>> refs/remotes/origin/master
 
+<<<<<<< HEAD
 A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the [Cursors](#cursors)  documentation for more details.
+=======
+A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row, rowNumber, cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the ###Cursor documentation for more details.
+>>>>>>> refs/remotes/origin/master
 
 In order to optimize memory and speed, except in the case of functional queries, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the actual number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count()`.
 
-A `projection` specification takes the form `{<desiredPropertyName>: {<classVariable>: "<resultPropertyName"}[,...]}`.
+A `projection` specification takes the form `{<desiredPropertyName>: {<classVariable>: "<resultPropertyName"}[, ...]}`.
 
 `.first(number)` results in a fixed cursor with the first N records or all the records if N is greater than the count of all records.
 
 `.random(number)` results in a fixed cursor with random N records or all the records if N is greater than the count of all records.
 
-`.sample(confidence,range)` results in a fixed cursor with a `confidence` that the included records are representative of the entire result set at +/- the `range`.
+`.sample(confidence, range)` results in a fixed cursor with a `confidence` that the included records are representative of the entire result set at +/- the `range`.
 
 The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
@@ -304,9 +314,9 @@ To create a functional query, provide `<function>` in the `where` clause rather 
 
 By default `select` clauses return a Promise which yields a cursor with rows represented by arrays of objects. By providing a projection, the row will be replaced with a single object that is a merger of data across the objects in the row.
 
-A `<projection>` takes the form `{<propertyName: {<classVariable: "<objectProperty>"}[,...]}`.
+A `<projection>` takes the form `{<propertyName: {<classVariable: "<objectProperty>"}[, ...]}`.
 
-For example `{e1name: {$e1: "name"},e2name: {$e2: "name"}}` will result in rows of the form `{e1name: "Joe",e2name: "Mary"}` assuming there are objects with the name "Joe" and "Mary" in database.
+For example `{e1name: {$e1: "name"}, e2name: {$e2: "name"}}` will result in rows of the form `{e1name: "Joe", e2name: "Mary"}` assuming there are objects with the name "Joe" and "Mary" in database.
 
 
 #### Joins
@@ -331,7 +341,7 @@ Only two way joins have been tested in the current release v0.x.x.
  
 ### When - Streaming Analytics
 
-`db.when(<pattern>).from({<classVariable>: <class>[,...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
+`db.when(<pattern>).from({<classVariable>: <class>[, ...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
 
 Whenever `<pattern>` is matched based on new data being inserted or existing data being changed, the function specified in `then` will be invoked.
 
@@ -340,9 +350,9 @@ Whenever `<pattern>` is matched based on new data being inserted or existing dat
 
 As noted above, changes to objects already inserted into the database result in automatic data and index updates; however, there is also an `update` command that can be used to base updates on query criteria.
 
-`db.update({<classVariable>: <class>[,...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [,...]} [,...]}).where(<pattern>).exec()`
+`db.update({<classVariable>: <class>[, ...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [, ...]} [, ...]}).where(<pattern>).exec()`
 
-For exampe: `db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}})` pairs Persons and adds partner names.
+For exampe: `db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null}, "@key": {$neq: {$p2: "@key"}}}})` pairs Persons and adds partner names.
 
 
 ### Direct Index Use
@@ -368,13 +378,13 @@ Single objects can be deleted directly using `<class>.index.delete(<object id>)`
 
 ### Array Matching
 
-Arrays are treated like objects for matching, e.g. `{children: {1:"Joe"}}`, matches an object `{children:["Mary","Joe"]}`.
+Arrays are treated like objects for matching, e.g. `{children: {1:"Joe"}}`, matches an object `{children:["Mary", "Joe"]}`.
 
 The max, average and min values of all arrays are indexed and can be tested using special "predicates" (they are actually indexed properties):
 
-*$max* - `{sizes: {$max: 5}}` matches `{sizes: [3,5,4,2]}`.
-*$avg* - `{sizes: {$avg: 3.5}}` matches `{sizes: [3,5,4,2]}`.
-*$min* - `{sizes: {$min: 2}}` matches `{sizes: [3,5,4,2]}`.
+*$max* - `{sizes: {$max: 5}}` matches `{sizes: [3, 5, 4, 2]}`.
+*$avg* - `{sizes: {$avg: 3.5}}` matches `{sizes: [3, 5, 4, 2]}`.
+*$min* - `{sizes: {$min: 2}}` matches `{sizes: [3, 5, 4, 2]}`.
 
 Normal mathematical tests can also be combined with $max, $min, and $avg, e.g. `{sizes: {$max: {$gt: 4}}}`
 
@@ -392,7 +402,7 @@ Invokving date modification functions such as `setTime` forces re-indexing of th
 
 ReasonDB supports the indexing of hidden and computed values. Just add an Array called `.indexKeys` as a property on a class and all instances will be indexed by the keys in the array.  `.indexKeys` will also eliminate keys from indexing if they are not listed. If you want to index all enumerable properties plus some function results and hidden properties, then insert an asterisk, `*`, into the array to tell ReasonDB to index all properties in addition to those listed. Below is the ReasonDB definition for `Array`. `Date` is handled in a similar manner.
 
-`Array.indexKeys = ["length","$max","$min","$avg","*"]`
+`Array.indexKeys = ["length", "$max", "$min", "$avg", "*"]`
 
 ***Note*** Functions must be callable with no arguments or default values for all arguments.
 
@@ -404,7 +414,7 @@ If you wish to skip indexing certain properties, then add them to a class proper
 
 Sometimes it may be necessary to force a re-index of an object based on changes that are a side effect of calling a method. The approach to handling this is similar to indexing computed values. Just add a class property called `.reindexCalls` than lists the methods you wish to drive re-indexing.  Below is the ReasonDB definition for `Array`. `Date` is handled in a similar manner.
 
-`Array.reindexCalls = ["push","pop","splice","reverse","fill","shift","unshift"]`
+`Array.reindexCalls = ["push", "pop", "splice", "reverse", "fill", "shift", "unshift"]`
 
 <a name="extending"></a>
 ## Extending ReasonDB
@@ -416,7 +426,7 @@ Adding predicates can be done in as little as one line of code!
 
 Here is the definition of the RegExp predicate:
 
-`Index.$matches = function(value,testValue) { return value.search(testValue)>=0; }`
+`Index.$matches = function(value, testValue) { return value.search(testValue)>=0; }`
 
 Just choose a predicate name, it must start with a `$`, and add it as a class property to `Index` with the value being a boolean function taking two arguments. The first argument will be the value stored in the index, the second value will be the value extracted from the patterns used in `where` and `when` clauses of JOQULAR qeuries. The first value will always be a primitive, i.e. `number`, `string`, or `boolean`.
 
@@ -427,42 +437,42 @@ Adding a persistence engine takes between 5 and 7 methods. A template is below:
 
 ```javascript
 class <StoreName> extends Store {
-	constructor(name,keyProperty,db,clear) {
-			super(name,keyProperty,db);
-			// Initialize your store here.
-			// Save data to the this.__metadata__ object, NOT the store itself!
-			// If you need config options, then add them to the top level database instance and access them from the db argument.
-		}
-	// lets the ReasonDB engine know if classnames can be used to split storage for efficiency by not sharing. This will usually be false.
-	static get split() { return false; };
-	async clear() {
-		// Clear all data from the store and return true if successful, false if not.
-		// The superclass does nto provide any methods to do this. It must be implemented by the child.
-	}
-	async delete(key) {
-		// Delete promise the data associated with the key and resolve to true if successful, false if not.
-		return super.delete(key,() => new Promise((resolve,reject) => { <insert code here> resolve(true); })) 
-	}
-	async get(key) {
-		// Return the data associated with the key as an object and undefined if the key does not exists.
-		// The superclass will handle resolving referencs to other classes.
-		return super.get(key,() => new Promise((resolve,reject) => { < insert code here> resolve(object); }));
-	}
-	async set(key,value,normalize) {
-		// Set the data associated with the key and return true if successful, false if not.
-		// The superclass will normalize the object if it contains references to other objects and ensure they are also persisted by
-		// calling back down to the child.
-		return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => { < insert code here > resolve(true); }));
-	}
-	async restore(json) {
-		// An optional utility method that should return an instantiated class including instantiated
-		// references to other objects. The superclass already provides this; but it can be overridden.
-	}
-	normalize(instance) {
-		// An optional utility method to convert the instance into plain JSON with embedded references 
-		// to other objects using their keys. Depending on your situation, you may need to make this 
-		// asynchronous and use it so save embedded objects. The superclass already provides this; but it can be overridden.
-	}
+  constructor(name, keyProperty, db, clear) {
+      super(name, keyProperty, db);
+      // Initialize your store here.
+      // Save data to the this.__metadata__ object, NOT the store itself!
+      // If you need config options, then add them to the top level database instance and access them from the db argument.
+    }
+  // lets the ReasonDB engine know if classnames can be used to split storage for efficiency by not sharing. This will usually be false.
+  static get split() { return false; };
+  async clear() {
+    // Clear all data from the store and return true if successful, false if not.
+    // The superclass does nto provide any methods to do this. It must be implemented by the child.
+  }
+  async delete(key) {
+    // Delete promise the data associated with the key and resolve to true if successful, false if not.
+    return super.delete(key, () => new Promise((resolve, reject) => { <insert code here> resolve(true); })) 
+  }
+  async get(key) {
+    // Return the data associated with the key as an object and undefined if the key does not exists.
+    // The superclass will handle resolving referencs to other classes.
+    return super.get(key, () => new Promise((resolve, reject) => { < insert code here> resolve(object); }));
+  }
+  async set(key, value, normalize) {
+    // Set the data associated with the key and return true if successful, false if not.
+    // The superclass will normalize the object if it contains references to other objects and ensure they are also persisted by
+    // calling back down to the child.
+    return super.set(key, value, normalize, (normalized) => new Promise((resolve, reject) => { < insert code here > resolve(true); }));
+  }
+  async restore(json) {
+    // An optional utility method that should return an instantiated class including instantiated
+    // references to other objects. The superclass already provides this; but it can be overridden.
+  }
+  normalize(instance) {
+    // An optional utility method to convert the instance into plain JSON with embedded references 
+    // to other objects using their keys. Depending on your situation, you may need to make this 
+    // asynchronous and use it so save embedded objects. The superclass already provides this; but it can be overridden.
+  }
 }
 ```
 
@@ -488,7 +498,7 @@ ReasonDB was designed to:
 
 The internal data structure for an index is:
 
-`{<property>: {<value>: {<type>: {<id>: true}[,...]}[,...]}[,...]}[,...]}`
+`{<property>: {<value>: {<type>: {<id>: true}[, ...]}[, ...]}[, ...]}[, ...]}`
 
 For example:
 
@@ -510,11 +520,11 @@ For storage, indexes are partitioned by property into KeyValue stores with `<cla
 Continuing with the above example, the below is pseudocode for how ReasonDB handles things internally:
 
 ```javascript
-store.set("Person.identifier",{Joe: {string: {Person@1: true, Person@3: true}}, {Mary: {string: {Person@2: true}});
-store.set("Person.age",age: {21: {number: {Person@1: true, Person@2: true}}, {24: {number: {Person@3: true}});
-store.set("Person@1",{indentifier: "Joe", age: 21, @key: "Person@1"});
-store.set("Person@3",{indentifier: "Joe", age: 24, @key: "Person@3"});
-store.set("Person@2",{indentifier: "Mary", age: 21, @key: "Person@2"});
+store.set("Person.identifier", {Joe: {string: {Person@1: true, Person@3: true}}, {Mary: {string: {Person@2: true}});
+store.set("Person.age", age: {21: {number: {Person@1: true, Person@2: true}}, {24: {number: {Person@3: true}});
+store.set("Person@1", {indentifier: "Joe", age: 21, @key: "Person@1"});
+store.set("Person@3", {indentifier: "Joe", age: 24, @key: "Person@3"});
+store.set("Person@2", {indentifier: "Mary", age: 21, @key: "Person@2"});
 ```
 <a name="cursors"></a>
 ### Cursors
@@ -535,23 +545,23 @@ An exception to the cross-product based cursor, is a cursor that results from do
 
 ## Performance
 
-Performance is tested using a single member object in a batch insertion or selection of 1,000 records, i.e. one insert statement with multiple records. When `insert` is async, objects are immediately persisted, but indexes are persisted only during otherwise idle time. The `select` test does a query but does not resolve data in the records, only ids are returned; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
+Performance is tested using a single member object in a batch insertion or selection of 1, 000 records, i.e. one insert statement with multiple records. When `insert` is async, objects are immediately persisted, but indexes are persisted only during otherwise idle time. The `select` test does a query but does not resolve data in the records, only ids are returned; hence, only index load and query time is included. The `read` test is the same as `select` but loads data for the selected object ids. The `cached select/read` is done immediately after an insert, so no additional disk access is required.
 
 Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz machine with 8GB RAM and fixed hard drives. Numbers provided are the average of 5 runs.
 
 
 | Storage                    | insert async/sync | select rec/sec | read rec/sec | cached select/read rec/sec |
 |----------------------------|-------------------|----------------|--------------|----------------------------|
-| JSONBlockStore (server)    | 5,000/750         | 43,500         | 4,000        | 85,000                     |
-| LocalStore (browser)       | 1,750/350         | 22,500         | 1,850        | 55,400                     |
-| LocalStore (server)        | 180/60            | 13,150         | 1,750        | 29,400                     |
-| LocalForageStore (browser) | 10                | 2,000          | 500          | 45,250                     |
-| LevelUpStore (server)      | 120/120           | 1,800          | 1,200        | 17,150                     |
-| MemStore (browser)         | 4,100/4,100       | 42,800         | 42,800       | 42,800                     |
-| MemStore (server)          | 10,100/10,100     | 75,700         | 75,700       | 75,700                     |
-| RedisStore (server)        | 1,000/350         | 21,000         | 2,500        | 58,000                     |
-| RedisStore (remote)        | 12/10             | 2,550          | 1,250        | 27,750                     |
-| IronCacheStore (remote)    | 5/3               | 1,550          | BLOCKS/ERRS  | 41,600                     |
+| JSONBlockStore (server)    | 5, 000/750         | 43, 500         | 4, 000        | 85, 000                     |
+| LocalStore (browser)       | 1, 750/350         | 22, 500         | 1, 850        | 55, 400                     |
+| LocalStore (server)        | 180/60            | 13, 150         | 1, 750        | 29, 400                     |
+| LocalForageStore (browser) | 10                | 2, 000          | 500          | 45, 250                     |
+| LevelUpStore (server)      | 120/120           | 1, 800          | 1, 200        | 17, 150                     |
+| MemStore (browser)         | 4, 100/4, 100       | 42, 800         | 42, 800       | 42, 800                     |
+| MemStore (server)          | 10, 100/10, 100     | 75, 700         | 75, 700       | 75, 700                     |
+| RedisStore (server)        | 1, 000/350         | 21, 000         | 2, 500        | 58, 000                     |
+| RedisStore (remote)        | 12/10             | 2, 550          | 1, 250        | 27, 750                     |
+| IronCacheStore (remote)    | 5/3               | 1, 550          | BLOCKS/ERRS  | 41, 600                     |
 
 
 ## Building & Testing
