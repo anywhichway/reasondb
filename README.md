@@ -519,7 +519,7 @@ store.set("Person@2",{indentifier: "Mary", age: 21, @key: "Person@2"});
 <a name="cursors"></a>
 ### Cursors
 
-Cursors are yielded to the `then` portion of a [select](#select). Cursors are asynchronous to simplify integration with third-party storage engines that may already return data asynchronously. Asynchronous cursors also simplify the creation of client/server based applications.
+A Cursor is yielded to the `then` portion of a [select](#select). Cursors are asynchronous to simplify integration with third-party storage engines that may already return data asynchronously. Asynchronous cursors also simplify the creation of client/server based applications.
 
 Most ReasonDB cursors do not store all permutations of data required to form a row resulting from a query. Instead, they encapsulate a light-weight cross-product engine that given an offset will assemble the row on the fly. See [Lazy Cartesian Product](http://phrogz.net/lazy-cartesian-product). The cross-product engine in ReasonDB can also handle join restrictions.
 
