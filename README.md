@@ -545,7 +545,7 @@ Testing was conducted under Windows 10 64-bit on an Intel i7 Quad Core 2.6GHz ma
 | Storage                    | insert async/sync | select rec/sec | read rec/sec | cached select/read rec/sec |
 |----------------------------|-------------------|----------------|--------------|----------------------------|
 | JSONBlockStore (server)    | 5, 000/750         | 43, 500         | 4, 000        | 85, 000                     |
-| LocalStore (browser)       | 1, 750/350         | 22, 500         | 1, 850        | 55, 400                     |
+| LocalStore (browser)       | 1, 750/350         | 30, 500         | 1, 850        | 55, 400                     |
 | LocalStore (server)        | 180/60            | 13, 150         | 1, 750        | 29, 400                     |
 | LocalForageStore (browser) | 10                | 2, 000          | 500          | 45, 250                     |
 | LevelUpStore (server)      | 120/120           | 1, 800          | 1, 200        | 17, 150                     |
@@ -575,6 +575,8 @@ ReasonDB currently supports Isolation and Durabilty but is not yet [ACID complia
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
+
+2016-12-23 v0.2.6 Added more performant intersection. Added issues folder under test for managing resolution to issue reports.
 
 2016-12-01 v0.2.5 Added function queries. `where` clause can now be a function that returns an array of rows of objects and ignores the normal look-up process, i.e. array of arrays. ReasonDB continues to handle projections and statistical sampling or row count limits.
 

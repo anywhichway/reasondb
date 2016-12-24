@@ -57,57 +57,7 @@ SOFTWARE.
 		}
 		return false;
 	}
-	
-	
 
-	/*function wait(object,property,ms=1000,count=1,test) {
-		let promises, promise;
-		if(!test) {
-			test = function(value) {
-				if(value!==test.value) {
-					return true;
-				}
-			}
-			test.value = object[property];
-		}
-		if(wait.promised[property]) {
-			promises = wait.promised[property].get(object);
-			if(promises) {
-				promise = promises.get(test);
-				if(promise) {
-					return promise;
-				}
-			} else {
-				promises = new Map();
-				wait.promised[property].set(object,promises);
-			}
-		} else {
-			wait.promised[property] = new Map();
-			promises = new Map();
-			wait.promised[property].set(object,promises);
-		}
-		promise = new Promise((resolve,reject) => {
-			let waiter = (() => {
-				let value = object[property];
-				if(test(value)) {
-					wait.promised[property].delete(object);
-					if(wait.promised[property].size===0) {
-						delete wait.promised[property];
-					}
-					resolve(value);
-				} else if(count>0) {
-					count--;
-					setTimeout(waiter,ms);
-				} else {
-					resolve();
-				}
-			})
-			waiter();
-		});
-		promises.set(test,promise);
-		return promise;
-	}
-	wait.promised = {};*/
 	
 	class Activity {
 		constructor(abort=(()=>{})) {
@@ -230,12 +180,41 @@ SOFTWARE.
 		}
 	});
 	
-	/*
-	 * https://github.com/Benvie
-	 * improvements 2015 by AnyWhichWay
-	 */
-	function intersection(h){var a=arguments.length;if(0===a)return[];if(1===a)return intersection(h,h);var e=0,k=0,l=0,m=[],d=[],n=new Map,b;do{var p=arguments[e],q=p.length,f=1<<e;b=0;if(!q)return[];k|=f;do{var g=p[b],c=n.get(g);"undefined"===typeof c?(l++,c=d.length,n.set(g,c),m[c]=g,d[c]=f):d[c]|=f}while(++b<q)}while(++e<a);a=[];b=0;do d[b]===k&&(a[a.length]=m[b]);while(++b<l);return a}
-	
+	function intersector(objects) {
+		return function intersection() {
+			var min = Infinity, // length of shortest array argument
+				shrtst = 0, // index of shortest array argument
+				set = (objects ? new Set() : {});
+				rslt = [], // result
+				mxj = arguments.length-1;
+			for(var j=0;j<=mxj;j++) { // find index of shortest array argument
+				var l = arguments[j].length;
+				if(l<min) {
+					shrtst = j;
+					min = l;
+				}
+			}
+			var shrt = arguments[shrtst],
+				mxi = shrt.length;
+			for(var i=0;i<mxi;i++) { // initialize set of possible values from shortest array
+				if(objects) { set.add(shrt[i]) } else { set[shrt[i]]=1 };
+			}
+			for(var j=0;j<=mxj;j++) { // loop through all array arguments
+				var	array = arguments[j],
+					mxk = array.length;
+				for(var k=0;k<mxk;k++) { // loop through all values
+					var item = array[k];
+					if((objects && set.has(item)) || set[item]) { // if value is possible
+						if(j===mxj) { // and all arrays have it (or we would not be at this point)
+							rslt.push(item); // add to results
+						}
+					}
+				}
+			}
+			return rslt;
+		}
+	}
+	var intersection = intersector();
 	//soundex from https://gist.github.com/shawndumas/1262659
 	function soundex(a){a=(a+"").toLowerCase().split("");var c=a.shift(),b="",d={a:"",e:"",i:"",o:"",u:"",b:1,f:1,p:1,v:1,c:2,g:2,j:2,k:2,q:2,s:2,x:2,z:2,d:3,t:3,l:4,m:5,n:5,r:6},b=c+a.map(function(a){return d[a]}).filter(function(a,b,e){return 0===b?a!==d[c]:a!==e[b-1]}).join("");return(b+"000").slice(0,4).toUpperCase()};
 	
