@@ -19,7 +19,7 @@ Observe that document has reverted to the last version before the first App rela
 
 var ReasonDB = require("../../../src/index.js");
 
-let db = new ReasonDB("./test/issues/13/db","@key",ReasonDB.JSONBlockStore,false,true),
+let db = new ReasonDB("./test/issues/13/database","@key",ReasonDB.JSONBlockStore,false,true),
 	doc = {test:0};
 db.select().from({$o:Object}).where({$o: {test: {$gte: 0}}}).exec().then((cursor) => {
 	if(cursor.maxCount>0) {
