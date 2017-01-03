@@ -1,36 +1,49 @@
-/* https://github.com/anywhichway/reasondb/issues/13
+'use strict'
 
-When using JSONBlockStore on the server, with clear=false, activate=true
+const childProcess = require('child_process')
+const path = require('path')
 
-Steps to reproduce:
+const App = function () {
+  console.log("\n==========\nApp launch\n==========")
+  this.launchFirst()
+}
 
-Launch app
-Insert document
-Update document
-Observe that document is updated (1)
-Relaunch app
-Get document (looks fine)
-Update document
-Observe that document is updated (2)
-Relaunch app
-Get document
-Observe that document has reverted to the last version before the first App relaunch
-*/
+App.prototype.runScript = function (scriptPath, callback) {
 
-var ReasonDB = require("../../../src/index.js");
+    let invoked = false
+    let process = childProcess.fork(scriptPath)
 
-let db = new ReasonDB("./test/issues/13/database","@key",ReasonDB.JSONBlockStore,false,true),
-	doc = {test:0};
-db.select().from({$o:Object}).where({$o: {test: {$gte: 0}}}).exec().then((cursor) => {
-	if(cursor.maxCount>0) {
-		cursor.forEach((row) => {
-			doc = row[0];
-			doc.test++;
-			console.log("Verify that db/Object contains " + JSON.stringify(doc) + " then relaunch.");
-		});
-	} else {
-		db.insert(doc).into(Object).exec().then(() => {
-			console.log("Verify that db/Object contains " + JSON.stringify(doc)  + " then relaunch.");
-		});
-	}
-});
+    process.on('error', (err) => {
+        if (invoked) return
+        invoked = true
+        callback(err)
+    })
+
+    // execute the callback once the process has finished running
+    process.on('exit', (code) => {
+        if (invoked) return
+        invoked = true
+        let err = code === 0 ? null : new Error('exit code ' + code)
+        callback(err)
+    })
+
+}
+
+App.prototype.launchFirst = function () {
+  this.runScript(path.resolve(__dirname,'first.js'), (err) => {
+      if (err) throw err
+      console.log("First script finished\n\n")
+      this.runScript(path.resolve(__dirname,'second.js'), (err) => {
+          if (err) throw err
+          console.log("Second script finished\n\n")
+          this.runScript(path.resolve(__dirname,'third.js'), (err) => {
+              if (err) throw err
+              console.log("Third script finished\n\n")
+          })
+      })
+  })
+}
+
+
+
+module.exports = new App()
