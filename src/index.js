@@ -560,6 +560,7 @@ SOFTWARE.
 			me.saveAsync = db.saveIndexAsync;
 			me.keys = {};
 			me.store = new StorageType(cls.name,keyProperty,db,clear);
+			me.store.scope[cls.name] = cls;
 			me.name = cls.name;
 			me.pending = {};
 		}
@@ -2243,6 +2244,10 @@ SOFTWARE.
 						exec() {
 							const activity = new Activity();
 							objects.forEach((object,i) => {
+								const cls = classes[i];
+								if(!cls.index) {
+									db.index(cls);
+								}
 								activity.step(() => {
 										let instance;
 										if(object instanceof cls) {

@@ -576,6 +576,8 @@ Currently updates to object properties are indepedently saved to the database au
 
 ## Updates (reverse chronological order)
 
+2017-01-11 v0.2.7 Fixed Issue 13 where updates were being saved to the Object index when a constructor could not be found for the classes of objects being updated. 
+
 2016-12-23 v0.2.6 Added more performant intersection. Added issues folder under test for managing resolution to issue reports.
 
 2016-12-01 v0.2.5 Added function queries. `where` clause can now be a function that returns an array of rows of objects and ignores the normal look-up process, i.e. array of arrays. ReasonDB continues to handle projections and statistical sampling or row count limits.
