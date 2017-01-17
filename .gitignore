@@ -6,6 +6,9 @@ logs
 *.log
 npm-debug.log*
 
+# Contains secret keys
+keys.bat
+
 # Runtime data
 pids
 *.pid

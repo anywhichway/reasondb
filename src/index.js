@@ -184,7 +184,7 @@ SOFTWARE.
 		return function intersection() {
 			var min = Infinity, // length of shortest array argument
 				shrtst = 0, // index of shortest array argument
-				set = (objects ? new Set() : {});
+				set = (objects ? new Set() : {}),
 				rslt = [], // result
 				mxj = arguments.length-1;
 			for(var j=0;j<=mxj;j++) { // find index of shortest array argument

@@ -576,6 +576,8 @@ Currently updates to object properties are indepedently saved to the database au
 
 ## Updates (reverse chronological order)
 
+2017-01-17 v0.2.8 Fixed Issue 15, changes to intersection in v2.6 had been copied from a non-strict codebase and broke during babelify with no errors during compile.
+
 2017-01-11 v0.2.7 Fixed Issue 13 where updates were being saved to the Object index when a constructor could not be found for the classes of objects being updated. 
 
 2016-12-23 v0.2.6 Added more performant intersection. Added issues folder under test for managing resolution to issue reports.

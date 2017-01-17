@@ -10,13 +10,13 @@ if(typeof(window)==="undefined") {
 	expect = chai.expect;
 	//Promise = require("bluebird");
 	//Promise.longStackTraces();
-	ReasonDB = require("../src/index.js");
+	ReasonDB = require("../lib/index.js");
 	let levelup = require("levelup");
 	LevelUPClient = levelup; //("./examples/basic/db");
 }
 
 function decaf() {
-	describe = function describe(name,group) {
+	/*describe = function describe(name,group) {
 		console.log(name);
 		group.call({timeout:()=>{}});
 	};
@@ -30,7 +30,7 @@ function decaf() {
 			console.log(name,e);
 		}
 		setTimeout(() => { console.log((done.passed ? "Passed" : "Failed"),name); },2000)
-	};
+	};*/
 }
 
 let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore,ReasonDB.IronCacheStore,ReasonDB.RedisStore,ReasonDB.MemcachedStore,ReasonDB.JSONBlockStore;
