@@ -296,6 +296,8 @@ A `projection` specification takes the form `{<desiredPropertyName>: {<classVari
 
 `.sample(confidence, range)` results in a fixed cursor with a `confidence` that the included records are representative of the entire result set at +/- the `range`.
 
+`.limit(number).page(offset)` results in a fixed cursor with the N records from the page `offset` with each page having been N records. Calling `limit` without page is the same as calling `.first`.
+
 The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
 See [Patterns](#patterns) above for a general description of `<pattern>` in the `where` clause.
@@ -533,7 +535,7 @@ The cross-product approach has two values:
 
 A side effect of the above is that it is not currently possible to know the actual number of rows in a cursor without doing additional computation to determine which rows are excluded as a result of join restrictions.
 
-An exception to the cross-product based cursor, is a cursor that results from down selection. The select clauses `first`, `random`, `sample`, result in the return of cursors with fixed pre-computed rows. However, the calling interface is identical. In fact, the same class is used to implement both types of cursor.
+An exception to the cross-product based cursor, is a cursor that results from down selection. The select clauses `first`, `random`, `sample`, `limit` result in the return of cursors with fixed pre-computed rows. However, the calling interface is identical. In fact, the same class is used to implement both types of cursor.
 
 ## Performance
 
@@ -575,6 +577,8 @@ ReasonDB currently supports Isolation and Durabilty but is not yet [ACID complia
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
+
+2017-01-21 v0.2.9 Added `limit(count)` and `page(offset)` to `select` added `.page(page,size)` to `Cursor` instances which returns reduced size cursor.
 
 2017-01-17 v0.2.8 Fixed Issue 15, changes to intersection in v2.6 had been copied from a non-strict codebase and broke during babelify with no errors during compile.
 

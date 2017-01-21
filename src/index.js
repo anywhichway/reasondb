@@ -273,29 +273,36 @@ SOFTWARE.
 			});
 		}
 		async first(count) {
-			const cursor = this;
-			return new Promise((resolve,reject) => {
-				let results = [];
-				cursor.forEach((row) => {
-					if(results.length<count) {
-						results.push(row);
+			return this.page(1,count);
+		}
+		async page(num,size) {
+			const cursor = this,
+				start = (num-1) * size,
+				promises = [];
+			if(start>=cursor.maxCount) {
+				return [];
+			}
+			for(let i=0;i<cursor.maxCount;i++) {
+				promises.push(cursor.get(i));
+			}
+			return Promise.all(promises).then((results) => {
+				const rows = [];
+				for(let i=start, j=0;i<results.length && j<size;i++) {
+					let row = results[i];
+					if(row) {
+						rows.push(row);
+						j++;
 					}
-					if(results.length===count) {
-						resolve(results);
-					}
-				}).then(() => {
-					if(results.length<count) {
-						resolve(results);
-					}
-				});
+				}
+				return rows;
 			});
 		}
 		async forEach(f) {
 			const cursor = this;
 			return new Promise((resolve,reject) => {
-				let promises = [],
-					results = [],
-					i = 0;
+				const promises = [],
+					results = [];
+				let i = 0;
 				function rows() {
 					promises.push(cursor.get(i).then((row) => {
 						if(row) {
@@ -2329,6 +2336,23 @@ SOFTWARE.
 										}
 									}
 								},
+								limit(count) {
+									const me = this;
+									select.limit = count;
+									return {
+										page(offset) {
+											select.page = offset;
+											return {
+												exec() {
+													return me.exec();
+												}
+											}
+										},
+										exec() {
+											return me.exec();
+										}
+									}
+								},
 								exec(ordering) {
 									return new Promise((resolve,reject) => {
 										const matches = {},
@@ -2342,7 +2366,11 @@ SOFTWARE.
 											});
 											asynchronize(pattern(...classes)).then((rows) => {
 												const cursor = new Cursor(classes,rows,projection,classVars);
-												if(select.firstCount) {
+												if(select.limit>=0) {
+													cursor.page(select.page||1,select.limit).then((rows) => {
+														resolve(new Cursor(classes,rows));
+													});
+												} else if(select.firstCount) {
 													cursor.first(select.firstCount).then((rows) => {
 														resolve(new Cursor(classes,rows));
 													});
@@ -2404,7 +2432,11 @@ SOFTWARE.
 														}
 													});
 													const cursor = new Cursor(classes,new CXProduct(collections,filter),projection,classVars);
-													if(select.firstCount) {
+													if(select.limit>=0) {
+														cursor.page(select.page||1,select.limit).then((rows) => {
+															resolve(new Cursor(classes,rows));
+														});
+													} else if(select.firstCount) {
 														cursor.first(select.firstCount).then((rows) => {
 															resolve(new Cursor(classes,rows));
 														});

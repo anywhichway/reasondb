@@ -367,7 +367,6 @@ promise.then((results) => {
 				db.select({name: {$e1: "name"}}).from({$e1: Object}).where((cls1) => { return [[{name:"Joe",age:24}]]}).exec().then((cursor) => { 
 					expect(cursor.maxCount).to.equal(1);
 					cursor.get(0).then((row) => {
-						console.log(row)
 						expect(row.name).to.equal("Joe");
 						done(); 
 					});
@@ -376,6 +375,36 @@ promise.then((results) => {
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}})', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).exec().then((cursor) => { 
 					expect(cursor.maxCount).to.equal(2); 
+					done(); 
+				});
+			});
+			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1)', function(done) {
+				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(1); 
+					done(); 
+				});
+			});
+			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(2)', function(done) {
+				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(2).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(2); 
+					done(); 
+				});
+			});
+			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(3)', function(done) {
+				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(3).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(2); 
+					done(); 
+				});
+			});
+			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1).page(2)', function(done) {
+				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1).page(2).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(1); 
+					done(); 
+				});
+			});
+			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1).page(3)', function(done) {
+				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1).page(3).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(0); 
 					done(); 
 				});
 			});
