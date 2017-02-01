@@ -813,6 +813,9 @@ SOFTWARE.
 							oldvalue = get.value,
 							oldtype = typeof(oldvalue);
 						let	type = typeof(value);
+						if(type==="undefined" && key[0]==="$") {
+							return Promise.resolve(); // ignore set for undefined on pseudo predicate
+						}
 						if(oldtype==="undefined" || oldvalue!=value) {
 							if(type==="undefined") {
 								delete get.value;
@@ -889,9 +892,13 @@ SOFTWARE.
 												index.keys[key] = node;
 												index.save(key,() => {
 													resolve(true);
+													//console.log(first,node,key,value,type)
 													if(!first) {
 														stream(object,db);
+														//console.log(node,key,value,type)
 													}
+												}).catch((e) => {
+													console.log(e);
 												});
 												/*index.store.set(index.name + "." + key,node).then(() => {
 													resolve(true);
@@ -921,7 +928,7 @@ SOFTWARE.
 						Object.defineProperty(object,key,desc);
 					}
 					if(reIndex) {
-						activity.step(() => set.call(object,value,true));
+						activity.step(() => set.call(object,value,true) );
 					}
 				});
 				activity.step(() => resolver(object)).exec();
