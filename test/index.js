@@ -49,7 +49,7 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 		promise = new Promise((resolve,reject) => {
 			resolver = resolve;
 		}),
-		o1 = {name: "Joe", age:function() { return 24; }, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
+		o1 = {oneEl:[1],emptyArray:[],name: "Joe", age:function() { return 24; }, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
 		p1= {name:"Mary",age:21,children:[1,2,3],skip:1};
     Object.skipKeys = ["skip"];
 	if(clear) {
@@ -93,6 +93,18 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 promise.then((results) => {
 	describe("test", function() {
 		describe("matches", function() {
+			it('{emptyArray: {length: 0}}',function(done) {
+					i.match({emptyArray: {length: 0}}).then((results) => {
+					expect(results.length).to.equal(1);
+					done();
+				});
+			});
+			it('{oneEl: {length: 1}}',function(done) {
+				i.match({oneEl: {length: 1}}).then((results) => {
+				expect(results.length).to.equal(1);
+				done();
+				});
+			});
 			it('{skip: 1}',function(done) {
 				i.match({skip: 1}).then((results) => {
 					expect(results.length).to.equal(0);
@@ -628,4 +640,3 @@ promise.then((results) => {
 });
 
 					
-

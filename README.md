@@ -578,6 +578,8 @@ Currently updates to object properties are indepedently saved to the database au
 
 ## Updates (reverse chronological order)
 
+2017-02-10 v0.2.10 Fixed Issue 19.
+
 2017-01-21 v0.2.9 Added `limit(count)` and `page(offset)` to `select` added `.page(page,size)` to `Cursor` instances which returns reduced size cursor.
 
 2017-01-17 v0.2.8 Fixed Issue 15, changes to intersection in v2.6 had been copied from a non-strict codebase and broke during babelify with no errors during compile.
