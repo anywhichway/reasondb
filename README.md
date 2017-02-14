@@ -2,7 +2,7 @@
 
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/63a0d8f9cb0a4d14a9a2a44ffda76369)](https://www.codacy.com/app/syblackwell/reasondb?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=anywhichway/reasondb&amp;utm_campaign=Badge_Grade)
 
-The first 100% native JavaScript automatically synchronizing object database with a SQL like syntax (JOQULAR) and swapable persistence engines for the browser or NodeJS. ReasonDB also supports JSON projections or live object result sets, pattern based and functional queries, asynchronous cursors, streaming analytics, 18 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, built in statistical sampling, and configurable unique id properties in as little as 75K.
+The first 100% native JavaScript automatically synchronizing object database with a SQL like syntax (JOQULAR) and swapable persistence engines for the browser or NodeJS. ReasonDB also supports full text indexing and search, JSON projections or live object result sets, pattern based and functional queries, asynchronous cursors, streaming analytics, 20 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, built in statistical sampling, and configurable unique id properties in as little as 50K.
 
 ReasonDB does not require that the class of objects stored be a subclass of any other class, nor does it require objects provide a special calling interface. ReasonDB is probably more compatible with existing object models than any other JSON database. All objects inserted to the database are activated, e.g.
 
@@ -17,7 +17,6 @@ Add JOQULAR query capability, joins, and streaming analytics to popular back-end
 If ReasonDB does not have a feature you want, you can [review and vote on enhancements](https://github.com/anywhichway/reasondb/issues?utf8=%E2%9C%93&q=is%3Aissue%20is%3Aopen%20is%3Aenhancement).
 
 
-
 [![NPM](https://nodei.co/npm/reasondb.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/reasondb/)
 
 
@@ -29,20 +28,20 @@ npm install reasondb
 
 ### Loading
 
-Users of Chrome 54.0 and greater can use the file at src/index.js so long as uuid is loaded first (72K). An unmodified, browserified copy of uuid v3.0.0 is provided in the `lib` directory for convenience: 
+Users of Chrome 54.0 and greater can use the file at `src/index.js` (71K) or `src/index.min.js` so long as uuid is loaded first . An unmodified, browserified copy of uuid v3.0.0 is provided in the `lib` directory for convenience: 
 
 ```javascript
 <script src="../lib/uuid.js"></script>
 <script src="../src/index.js"></script>
 ```
 
-A browserified version of ReasonDB is located at browser/reasondb.js (264K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note**: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the tests and examples are "decafinated" and print to the console rather than the browser page.
+A browserified version of ReasonDB is located at browser/reasondb.js (200K). It will operate in Chrome, Firefox, Microsoft Edge (although Edge fails with localStorage). Chrome is almost twice as fast as either Firefox or Edge. **Note**: The unit tests only work reliably in Chrome. However, this is due to how the tests are written and/or the behavior of Mocha and Chai. In some cases the tests and examples are "decafinated" and print to the console rather than the browser page.
 
 ```javascript
 <script src="../browser/reasondb.js"></script>
 ```
 
-NodeJS 6.x users can use a smaller Babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (135K): 
+NodeJS 6.x users can use a smaller Babelified version with normal `require` syntax. The code actually loaded is in `lib/index.js` (120K): 
 
 ```javascript
 require("index.js");
@@ -57,7 +56,6 @@ NodeJS 7.x users can use the version in the src directory so long as the --harmo
 The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however it also supports nested objects, the return of matching JavaScript instances, and streaming analytics. 
 
 Unlike other object databases, the JavaScipt objects used with ReasonDB do not have to be subclassed from a special root class. You can even use  direct instances of Object! No special calling interfaces are required of the objects to be stored.
-
 
 Below are examples of each primary operation supported drawn from code in the `examples/basic/index.js` file:
 
@@ -101,7 +99,7 @@ db.when({$p: {partner: {$neq: null}}}).from({$p: Person}).select().then((cursor)
 let p1 = new Person("Joe", new Date("1960-01-16"));
 
 Promise.all([
-    // Insert Objects into the Person index casting it to a Person as it is inserted, if not already a Person.
+    // Insert Object into the Person index casting it to a Person as it is inserted, if not already a Person.
     db.insert([{name:"Mary", birthday:new Date("1961-01-15")}, {name:"Bill", birthday:new Date("1960-01-16")}, p1]).into(Person).exec(),
     
     // Insert an Object that looks like a Person into the Object index.
@@ -231,6 +229,8 @@ ReasonDB supports both a pattern based query mechanism using the predicates belo
 
 *$contains* - Similar to *$matches* but just supports strings not regular expressions.
 
+*$search* - Uses a full-text index on a property. The search string is tokenized and lowercased and processing is un-ordered. All documents containing all tokens will be returned. Currently ordering of the returned documents is indeterminate. **NOTE** To use full-text indexing you must configure properties for indexing by adding and populating an array, `.fullTextKeys` on the class you wish to index. There is an example in `examples/fulltext`.
+
 *$in* - Tests to see if a value is in the specified sequence, e.g. `{age:{$in:[24, 25]}}` only matches 24 and 25. Types must match.
 
 *$nin* - Tests to see if a value is not in the specified sequence, e.g. `{age:{$nin:[24, 25]}}` matches everything except 24 and 25. Types must match.
@@ -305,6 +305,8 @@ A `projection` specification takes the form `{<desiredPropertyName>: {<classVari
 The `from` clause is an object, the properties of which are variable names to be used in the `where` clause. The values of the properties are classes.
 
 See [Patterns](#patterns) above for a general description of `<pattern>` in the `where` clause.
+
+#### Functional Queries
 
 To create a functional query, provide `<function>` in the `where` clause rather than `<pattern>`. The function must return an an array of rows of objects, i.e. array of arrays. The column order of the row arrays should match that of the passed in classes. ReasonDB continues to manage projections and statistical sampling or row count limits. The function will be passed all the classes named in the `from` clause. The class indecies can be accessed from within the query function, or the program can use its own mechanisms for keeping track of instances.
 
@@ -412,6 +414,11 @@ keep the size of the indexes smaller.
 ## Skipping Indexing
 
 If you wish to skip indexing certain properties, then add them to a class property called `.skipKeys`. Alternatively, use `.indexKeys` and only list the keys you wish to index.
+
+## Full Text Indexing
+
+To use full text indexing just add an array of property names you would like indexed to `.fullTextKeys` on the class you wish to index. **NOTE* Properties that are full text indexed can only be
+searched using the `$search` predicate. Other predicates such as `$contains` and `$eq` will not work on full-text indexed properties.
 
 ## Forcing Reindexing
 
@@ -529,6 +536,9 @@ store.set("Person@1", {indentifier: "Joe", age: 21, @key: "Person@1"});
 store.set("Person@3", {indentifier: "Joe", age: 24, @key: "Person@3"});
 store.set("Person@2", {indentifier: "Mary", age: 21, @key: "Person@2"});
 ```
+
+Full-text indexes have a similar structure and use tokens that have all vowels removed for compression. A future version will support the choice of un-compressed tokens, vowel compressed tokens, and trigrams. Exact matching of terms is done within the Cursor as though the text property were a deferd key.
+
 <a name="cursors"></a>
 ### Cursors
 
@@ -586,6 +596,8 @@ ReasonDB currently supports Isolation and Durabilty but is not yet [ACID complia
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
+
+2017-02-12 v0.3.1 Added full-text indexing and search. See `.fullTextKeys` and `$search` in documentation. Refactored 20 un-necessary nested Promises. Added fastForEach. Added minified version of `src/index.js` for Chrome and node v7.x users.
 
 2017-02-10 v0.3.0 Code base made more modular with respect to server side drivers. Drivers must now be loaded separately. See documentation above. Added a `deferKeys` option to classes that prevents
 a full index being created on a property but still allows the property to be queried using JOQULAR. Addressed a scoping issue with `JSONBlockStore` that prevented it from restoring classes properly in some situations.

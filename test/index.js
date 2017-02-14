@@ -59,6 +59,7 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 		p1= {name:"Mary",age:21,children:[1,2,3],skip:1,defer:"a long bit of text that should not be indexed"};
     Object.skipKeys = ["skip"];
     Object.deferKeys = ["defer"];
+    Object.fullTextKeys = ["notes"];
 	if(clear) {
 		["Array","Date","Object","Pattern"].forEach((name) => {
 			if(store==ReasonDB.RedisStore) {
@@ -84,7 +85,7 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 			}
 		});
 		let a1 = {city:"Seattle",zipcode:{base:98101,plus4:1234}},
-			p2 = {wife:p1,name:"Joe",age:24,address:a1,defer:"a long bit of text that should not be indexed"},
+			p2 = {wife:p1,name:"Joe",age:24,address:a1,defer:"a long bit of text that should not be indexed",notes:"a long text note"},
 			p3 = {name:"Mary",birthday:new Date(1962,0,15)},
 			activity = new ReasonDB.Activity(resolver);
 		activity.step(() => i.put(o1).catch((err) => console.log(err)));
@@ -104,7 +105,6 @@ promise.catch((err) => {
 	console.log(err);
 });
 promise.then((results) => {
-	console.log("Testing ...");
 	describe("test", function() {
 		describe("matches", function() {
 			it('{emptyArray: {length: 0}}',function(done) {
@@ -380,6 +380,26 @@ promise.then((results) => {
 			});
 		});
 		describe("queries (all match criteria above also supported)", function() {
+			it('db.select().from({$e1: Object}).where({$e1: {notes: {$search: "text long"}}})',function(done) {
+				db.select().from({$e1: Object}).where({$e1: {notes: {$search: "text long"}}}).exec().then((cursor) => {
+					expect(cursor.maxCount).to.equal(1);
+					cursor.get(0).then((row) => { 
+						row[0].notes = "a short text note";
+						if(!activate) {
+							promise = db.save(row[0]).exec();
+						} else {
+							promise = Promise.resolve();
+						}
+						promise.then(() => {
+							//expect(cursor.maxCount).to.equal(0);
+							db.select().from({$e1: Object}).where({$e1: {notes: {$search: "text short"}}}).exec().then((cursor) => {
+								expect(cursor.maxCount).to.equal(1);
+								done();
+							}); 
+						});
+					});
+				});						
+			});
 			it('db.select().from({$e1: Object}).where((cls1) => { return [[{name:"Joe",age:24}]]})', function(done) {
 				db.select().from({$e1: Object}).where((cls1) => { return [[{name:"Joe",age:24}]]}).exec().then((cursor) => { 
 					expect(cursor.maxCount).to.equal(1);

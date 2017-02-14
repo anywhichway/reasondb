@@ -46,11 +46,11 @@ let start =  now(),
 	next;
 db.insert(...data).into(Person).exec().then((results) => {
 	next = now();
-	console.log("records/sec ", count/((next-start)/1000));
+	console.log("insert records/sec ", count/((next-start)/1000));
 }).then(() => {
 	db.select().from({$p: Person}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
 		let end = now();
-		console.log("records/sec ", cursor.maxCount/((end-next)/1000));
+		console.log("select records/sec ", cursor.maxCount/((end-next)/1000));
 	});
 });
 

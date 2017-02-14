@@ -27,6 +27,42 @@ SOFTWARE.
 		let r = require;
 		_uuid = r("uuid");
 	}
+	 
+	Object.defineProperty(Array.prototype,"fastForEach",{value: function(f) {
+		const len = this.length;
+		if(f.length===1) {
+			for(let i in this) { i < len && f(this[i]); }
+		} else {
+			for(let i=0;i<len;i++) { f(this[i],i,this); }
+		}
+	}});
+	
+	const removePunctuation = (str) => {
+		str.replace(/\.\s|;\s|\,\s|\!\s|\:\s/," ");
+		if([";",",",".","!",":"].indexOf(str[str.length-1])>=0) {
+			return str.substring(0,str.length-1);
+		}
+		return str;
+	}
+	
+	const continueTokens = (tokens,stopTokens) => {
+		const continuable = [];
+		for(let i=0;i<tokens.length;i++) {
+			let str = tokens[i];
+			if(stopTokens.indexOf(str)===-1) {
+				continuable.push(str.replace(/[aeiou<>"'\{\}\[\]\(\)]/g,"").toLowerCase()); // \-\=\+\*\~
+			}
+		}
+		return continuable;
+	}
+	const trigrams = (tokens) => {
+		const grams = [],
+			str = tokens.join("");
+		for(let i=0;i<str.length-2;i++) {
+			grams.push(str.substring(i,i+3));
+		}
+		return grams;
+	}
 	
 	const asynchronize = async (value) => {
 		if(value instanceof Promise) {
@@ -34,29 +70,6 @@ SOFTWARE.
 		}
 		return Promise.resolve(value);
 	}
-	
-	async function forEachAsync(f) {
-		const iterable = this;
-		for(let i=0;i<iterable.length;i++) {
-			await asynchronize(f(iterable[i]));
-		}
-		return;
-	}
-	async function everyAsync(f) {
-		const iterable = this;
-		for(let i=0;i<iterable.length;i++) {
-			if(!await asynchronize(f(iterable[i]))) { return false; }
-		}
-		return true;
-	}
-	async function someAsync(f) {
-		const iterable = this;
-		for(let i=0;i<iterable.length;i++) {
-			if(await asynchronize(f(iterable[i]))) { return true; }
-		}
-		return false;
-	}
-
 	
 	class Activity {
 		constructor(abort=(()=>{})) {
@@ -126,23 +139,23 @@ SOFTWARE.
 	Array.reindexCalls = ["push","pop","splice","reverse","fill","shift","unshift"];
 	Array.fromJSON = function(json) {
 		const array = [];
-		Object.keys(json).forEach((key) => {
+		Object.keys(json).fastForEach((key) => {
 			array[key] = json[key];
 		});
 		return array;
 	}
 	Object.defineProperty(Array.prototype,"$max",{enumerable:false,configurable:true,
-		get:function() { let result; this.forEach((value) => { result = (result!=null ? (value > result ? value : result) : value); }); return result;},
+		get:function() { let result; this.fastForEach((value) => { result = (result!=null ? (value > result ? value : result) : value); }); return result;},
 		set:function() { }
 	});
 	Object.defineProperty(Array.prototype,"$min",{enumerable:false,configurable:true,
-		get:function() { let result; this.forEach((value) => { result = (result!=null ? (value < result ? value : result) : value); }); return result;},
+		get:function() { let result; this.fastForEach((value) => { result = (result!=null ? (value < result ? value : result) : value); }); return result;},
 		set:function() { }
 	});
 	Object.defineProperty(Array.prototype,"$avg",{enumerable:false,configurable:true,
 		get:function() { 
 			let result = 0, count = 0; 
-			this.forEach((value) => {
+			this.fastForEach((value) => {
 				let v = value.valueOf();
 				if(typeof(v)==="number") {
 					count++;
@@ -158,14 +171,14 @@ SOFTWARE.
 	Date.reindexCalls = [];
 	Date.fromJSON = function(json) {
 		const dt = new Date(json.time);
-		Object.keys(json).forEach((key) => {
+		Object.keys(json).fastForEach((key) => {
 			if(key!=="time") {
 				dt[key] = json[key];
 			}
 		});
 		return dt;
 	}
-	Object.getOwnPropertyNames(Date.prototype).forEach((key) => {
+	Object.getOwnPropertyNames(Date.prototype).fastForEach((key) => {
 		if(key.indexOf("get")===0) {
 			const name = (key.indexOf("UTC")>=0 ? key.slice(3) : key.charAt(3).toLowerCase() + key.slice(4)),
 				setkey = "set" + key.slice(3),
@@ -240,7 +253,7 @@ SOFTWARE.
 	function CXProduct(collections,filter) {
 		this.collections = (collections ? collections : []);
 		this.filter = filter;
-		Object.defineProperty(this,"length",{set:function() {},get:function() { if(this.collections.length===0){ return 0; } if(this.start!==undefined && this.end!==undefined) { return this.end - this.start; }; var size = 1; this.collections.forEach(function(collection) { size *= collection.length; }); return size; }});
+		Object.defineProperty(this,"length",{set:function() {},get:function() { if(this.collections.length===0){ return 0; } if(this.start!==undefined && this.end!==undefined) { return this.end - this.start; }; var size = 1; this.collections.fastForEach((collection) => { size *= collection.length; }); return size; }});
 		Object.defineProperty(this,"size",{set:function() {},get:function() { return this.length; }});
 	}
 	// there is probably an alogorithm that never returns null if index is in range and takes into account the restrict right
@@ -268,7 +281,7 @@ SOFTWARE.
 			me.classVarMap = {};
 			me.classVars = classVars;
 			me.defered = defered; // v0.3.0
-			Object.keys(classVars).forEach((classVar,i) => {
+			Object.keys(classVars).fastForEach((classVar,i) => {
 				me.classVarMap[classVar] = i;
 			});
 		}
@@ -299,7 +312,7 @@ SOFTWARE.
 		}
 		async forEach(f) {
 			const cursor = this;
-			return new Promise((resolve,reject) => {
+			//return new Promise((resolve,reject) => {
 				const promises = [],
 					results = [];
 				let i = 0;
@@ -319,11 +332,11 @@ SOFTWARE.
 					}
 				}
 				rows();
-				Promise.all(promises).then((rows) => {
-					resolve(results);
+				return Promise.all(promises).then((rows) => {
+					return results; //resolve(results);
 				});
 				//resolve(promises);
-			});
+			//});
 		}
 		async every(f) {
 			const cursor = this;
@@ -426,13 +439,13 @@ SOFTWARE.
 		async count() {
 			const cursor = this;
 			let i = 0;
-			return new Promise((resolve,reject) => {
-				cursor.forEach((row) => {
+			//return new Promise((resolve,reject) => {
+				return cursor.forEach((row) => {
 					i++;
 				}).then(() => {
-					resolve(i);
+					return i; //resolve(i);
 				});
-			});
+			//});
 		}
 		async get(rowNumber) {
 			const me = this;
@@ -466,21 +479,21 @@ SOFTWARE.
 				}
 				return undefined; // should we throw an error?
 			}
-			return new Promise((resolve,reject) => {
+			//return new Promise((resolve,reject) => {
 				const promises = [],
 					vars = Object.keys(me.classVars);
 				if(rowNumber>=0 && rowNumber<me.cxproduct.length) {
 					const row = me.cxproduct.get(rowNumber);
 					if(row) {
-						row.forEach((id,col) => {
+						row.fastForEach((id,col) => {
 							let classVar = vars[col],
 							cls = me.classVars[classVar];
 							promises.push(cls.index.get(row[col]));
 						});
-						Promise.all(promises).then((instances) => {
+						return Promise.all(promises).then((instances) => {
 							let result;
 							if(me.defered && !me.defered(instances)) {
-								resolve();
+								return; //resolve();
 							}
 							if(me.projection) {
 								result = {};
@@ -496,7 +509,7 @@ SOFTWARE.
 										}
 									}
 								})) {
-									resolve();
+									return; //resolve();
 								}
 							} else {
 								result = [];
@@ -506,18 +519,18 @@ SOFTWARE.
 										return true;
 									}
 								})) {
-									resolve();
+									return; //resolve();
 								}
 							}
-							resolve(result);
+							return result; //resolve(result);
 						});
 					} else {
-						resolve();
+						return; //resolve();;
 					}
 				} else {
-					resolve();
+					return; //resolve();
 				}
-			});	
+			//});	
 		}
 		get maxCount() {
 			return (this.rows ? this.rows.length : this.cxproduct.length);
@@ -526,27 +539,27 @@ SOFTWARE.
 	function stream(object,db) {
 		const fired = {},
 			cls = object.constructor;
-		Index.keys(object).forEach((key) => {
+		Index.keys(object).fastForEach((key) => {
 			if(db.patterns[cls.name] && db.patterns[cls.name][key]) {
-				Object.keys(db.patterns[cls.name][key]).forEach((patternId) => {
+				Object.keys(db.patterns[cls.name][key]).fastForEach((patternId) => {
 					if(fired[patternId]) { return; }
-					Object.keys(db.patterns[cls.name][key][patternId]).forEach((classVar) => {
+					Object.keys(db.patterns[cls.name][key][patternId]).fastForEach((classVar) => {
 						const pattern = db.patterns[cls.name][key][patternId][classVar],
 							when = {};
 						let projection;
 						if(!pattern.action) { return; }
 						if(pattern.projection) {
 							projection = {};
-							Object.keys(pattern.projection).forEach((key) => {
+							Object.keys(pattern.projection).fastForEach((key) => {
 								if(key!==db.keyProperty) {
 									projection[key] = pattern.projection[key];
 								}
 							});
 						}
-						Object.keys(pattern.when).forEach((key) => {
+						Object.keys(pattern.when).fastForEach((key) => {
 							if(key!==db.keyProperty) {
 								when[key] = {};
-								Object.keys(pattern.when[key]).forEach((wkey) => {
+								Object.keys(pattern.when[key]).fastForEach((wkey) => {
 									when[key][wkey] = pattern.when[key][wkey];
 								});
 								if(pattern.classVars[key] && object instanceof pattern.classVars[key]) {
@@ -635,12 +648,12 @@ SOFTWARE.
 		async clear() {
 			const index = this,
 				promises = [];
-			Object.keys(index).forEach((key) => {
+			Object.keys(index).fastForEach((key) => {
 				promises.push(index.delete(key));
 			});
-			return new Promise((resolve,reject) => {
-				Promise.all(promises).then(() => { resolve(); });
-			});
+			//return new Promise((resolve,reject) => {
+				return Promise.all(promises).then(() => { return; });
+			//});
 		}
 		async delete(id) {
 			const index = this,
@@ -653,7 +666,7 @@ SOFTWARE.
 						const promises = [];
 						promises.push(store.delete(id,true).catch((e) => { console.log(e); }));
 						if(object) {
-							Index.keys(object).forEach((key) => {
+							Index.keys(object).fastForEach((key) => {
 								promises.push(new Promise((resolve,reject) => {
 									index.get(key,(node) => {
 										if(!node) { 
@@ -701,26 +714,26 @@ SOFTWARE.
 				});
 			}
 			if(pending) {
-				return new Promise((resolve,reject) => {
-					pending.then((result) => {
+				//return new Promise((resolve,reject) => {
+					return pending.then((result) => {
 						if(typeof(result)!=="undefined") {
 							let pending = doit();
 							index.pending[id] = pending;
-							pending.then(() => {
+							return pending.then(() => {
 								//console.log("deleted")
-								resolve(true);
+								return true; //resolve(true);
 							});
 						}
 					});
-				});
+				//});
 			} else {
 				const pending = index.pending[id] = doit();
-				return new Promise((resolve,reject) => {
-					pending.then((result) => {
+				//return new Promise((resolve,reject) => {
+					return pending.then((result) => {
 						delete index.pending[id];
-						resolve(true);
+						return true; //resolve(true);
 					});
-				});
+				//});
 			}
 		}
 		flush(key) {
@@ -785,7 +798,7 @@ SOFTWARE.
 			const promise = new Promise((resolve,reject) => { resolver = resolve; rejector = reject; });
 			index.keys[id] = object;
 			if(object.constructor.reindexCalls) {
-				object.constructor.reindexCalls.forEach((fname) => {
+				object.constructor.reindexCalls.fastForEach((fname) => {
 					let f = object[fname];
 					if(!f.reindexer) {
 						Object.defineProperty(object,fname,{configurable:true,writable:true,value:function() {
@@ -802,7 +815,7 @@ SOFTWARE.
 			const indexed = (reIndex ? store.set(id,object,true) : Promise.resolve());
 			indexed.then(() => {
 				let activity = new Activity(resolver);
-				Index.keys(object).forEach((key) => {
+				Index.keys(object).fastForEach((key) => {
 					let value = object[key],
 						desc = Object.getOwnPropertyDescriptor(object,key);
 					function get() {
@@ -837,6 +850,34 @@ SOFTWARE.
 								type = typeof(value);
 							}
 							return new Promise((resolve,reject) => {
+									if(cls.fullTextKeys && cls.fullTextKeys.indexOf(key)>=0) {
+										const oldtokens = (oldtype==="string" ? continueTokens(removePunctuation(oldvalue).split(" "),ReasonDB.stopWords) : []),
+											newtokens = continueTokens(removePunctuation(value).split(" "),ReasonDB.stopWords);
+										if(oldtokens.length>0 || newtokens.length>0) {
+											index.get("$tokens",(node) => {
+												const indexkey = cls.name + "." + "$tokens";
+												node = (index.keys[indexkey] || (index.keys[indexkey]={}));
+												oldtokens.fastForEach((token) => {
+													if(node[token]) {
+														delete node[token][id];
+													}
+												});
+												newtokens.fastForEach((token) => {
+													if(token.length>0) {
+														node[token] || (node[token]={});
+														node[token][id] || (node[token][id]=0);
+														node[token][id]++;
+													}
+												});
+												index.save("$tokens").then(() => {
+													resolve(true);
+												});
+											});
+										} else {
+											resolve(true);
+										}
+									}
+								
 									index.get(key,(node) => {
 										node = index.keys[indexkey]; // re-assign since 1) we know it is loaded and initialized, 2) it may have been overwritten by another async
 										if(!instance[keyProperty]) { // object may have been deleted by another async call!
@@ -893,7 +934,7 @@ SOFTWARE.
 											}
 											node[value][type][id] = true;
 											let restorable = false;
-											if(node[oldvalue] && node[oldvalue][oldtype]) {
+											if(node[oldvalue] && node[oldvalue][oldtype] && node[oldvalue][oldtype][id]) {
 												delete node[oldvalue][oldtype][id];
 												restorable = true;
 											}
@@ -910,12 +951,6 @@ SOFTWARE.
 												}).catch((e) => {
 													console.log(e);
 												});
-												/*index.store.set(index.name + "." + key,node).then(() => {
-													resolve(true);
-													if(!first) {
-														stream(object,db);
-													}
-												});*/
 											}).catch((e) => {
 												delete node[value][type][id];
 												if(restorable) {
@@ -983,7 +1018,7 @@ SOFTWARE.
 			}
 			let	index = currentclass.index,
 				keyProperty = currentclass.name + "." + index.store.keyProperty;
-			Object.keys(classVars).forEach((classVar,i) => {
+			Object.keys(classVars).fastForEach((classVar,i) => {
 				cols[classVar] = i;
 				if(!results[classVar]) { results[classVar] = null; }
 				if(!restrictRight[i]) { restrictRight[i] = {}; };
@@ -998,7 +1033,7 @@ SOFTWARE.
 					}
 				}
 			}
-			return new Promise((resolve,reject) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
+			//return new Promise((resolve,reject) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
 				nodes.every((node,i) => {
 					const key = keys[i],
 						value = pattern[key],
@@ -1013,7 +1048,7 @@ SOFTWARE.
 					if(type!=="object") {
 						return literals[i] = true;
 					}
-					Object.keys(value).forEach((key) => {
+					Object.keys(value).fastForEach((key) => {
 						if(classVars[key]) {
 							const rightClass = (nestedClass ? nestedClass : classVars[key]),
 								rightKeyProperty = rightClass.index.store.keyProperty,
@@ -1043,7 +1078,7 @@ SOFTWARE.
 					});
 					return true;
 				});
-				if(results[classVar] && results[classVar].length===0) { resolve([]); return; }
+				if(results[classVar] && results[classVar].length===0) { return []; } //resolve([]); return
 				let exclude = [];
 				nodes.every((node,i) => {
 					if(!literals[i]) { return true; }
@@ -1051,9 +1086,14 @@ SOFTWARE.
 						value = pattern[key],
 						type = typeof(value);
 					if(type==="undefined") {
-						Object.keys(node).forEach((testValue) => {
-							Object.keys(node[testValue]).forEach((testType) => {
-								exclude = exclude.concat(Object.keys(node[testValue][testType]));
+						Object.keys(node).fastForEach((testValue) => {
+							Object.keys(node[testValue]).fastForEach((testType) => {
+								const ids = Object.keys(node[testValue][testType]);
+								if(ids.length===0) {
+									delete node[testValue][testType];
+								} else {
+									exclude = exclude.concat(ids);
+								}
 							});
 						});
 						return true;
@@ -1068,7 +1108,7 @@ SOFTWARE.
 					results[classVar] = (results[classVar] ? intersection(results[classVar],ids) : ids);
 					return results[classVar].length > 0;
 				});
-				if(results[classVar] && results[classVar].length===0) { resolve([]); return; }
+				if(results[classVar] && results[classVar].length===0) { return [];  } //resolve([]); return;
 				nodes.every((node,i) => {
 					if(!tests[i]) { return true; }
 					const key = keys[i],
@@ -1079,33 +1119,69 @@ SOFTWARE.
 						test = Index[testname];
 					let	ids = [];
 					if(type==="undefined" && (testname==="$eq" || testname==="$eeq")) {
-						Object.keys(node).forEach((testValue) => {
-							Object.keys(node[testValue]).forEach((testType) => {
-								exclude = exclude.concat(Object.keys(node[testValue][testType]));
+						Object.keys(node).fastForEach((testValue) => {
+							Object.keys(node[testValue]).fastForEach((testType) => {
+								const tempids = Object.keys(node[testValue][testType]);
+								if(tempids.length===0) {
+									delete node[testValue][testType];
+								} else {
+									exclude = exclude.concat(tempids);
+								}
 							});
 						});
 						return true;
 					}
-					Object.keys(node).forEach((testValue) => {
-						Object.keys(node[testValue]).forEach((testType) => {
-							if(test(Index.coerce(testValue,testType),value)) {
-								ids = ids.concat(Object.keys(node[testValue][testType]));
+					if(testname==="$search") {
+						if(currentclass.fullTextKeys && currentclass.fullTextKeys.indexOf(key)>=0) {
+							const tokens = continueTokens(removePunctuation(value).split(" "),ReasonDB.stopWords);
+							if(tokens.length>0) {
+								let matchids;
+								tokens.fastForEach((token) => {
+									const index = currentclass.index,
+										indexkey = currentclass.name + "." + "$tokens";
+									if(index.keys[indexkey][token]) {
+										const tempids = Object.keys(index.keys[indexkey][token]);
+										if(tempids.length===0) {
+											delete index.keys[indexkey][token];
+										} else {
+											matchids = (matchids ? intersection(matchids,tempids) : tempids); 
+										}
+									}
+								});
+								if(matchids) {
+									results[classVar] = (results[classVar] ? intersection(results[classVar],matchids) :  matchids);
+									return results[classVar].length > 0;
+								}
 							}
+						}
+						return false;
+					} else {
+						Object.keys(node).fastForEach((testValue) => {
+							Object.keys(node[testValue]).fastForEach((testType) => {
+								if(test(Index.coerce(testValue,testType),value)) {
+									const tmpids = Object.keys(node[testValue][testType]);
+									if(tmpids.length===0) {
+										delete node[testValue][testType];
+									} else {
+										ids = ids.concat(tmpids);
+									}
+								}
+							});
 						});
-					});
-					ids = ids.filter((id) => { return !currentclass || id.indexOf(currentclass.name+"@")===0; });
-					results[classVar] = (results[classVar] ? intersection(results[classVar],ids) :  intersection(ids,ids));
-					return results[classVar].length > 0;
+						ids = ids.filter((id) => { return !currentclass || id.indexOf(currentclass.name+"@")===0; });
+						results[classVar] = (results[classVar] ? intersection(results[classVar],ids) :  intersection(ids,ids));
+						return results[classVar].length > 0;
+					}
 				});
-				if(results[classVar] && results[classVar].length===0) { resolve([]); return; }
+				if(results[classVar] && results[classVar].length===0) { return [];  } // resolve([]); return;
 				const promises = [],
 					childnodes = [],
 					nestedtypes = [];
-				nodes.forEach((node,i) => {
+				nodes.fastForEach((node,i) => {
 					if(!nestedobjects[i]) { return; }
 					const key = keys[i],
 						nestedobject = pattern[key];
-					Object.keys(node).forEach((key) => {
+					Object.keys(node).fastForEach((key) => {
 						if(key.indexOf("@")>0) {
 							const parts = key.split("@"),
 								clsname = parts[0];
@@ -1116,35 +1192,40 @@ SOFTWARE.
 							nestedtypes.push(new Function("return " + clsname)());
 						}
 					});
-					nestedtypes.forEach((nestedtype) => {
+					nestedtypes.fastForEach((nestedtype) => {
 						promises.push(nestedtype.index.match(nestedobject,classVars,classMatches,restrictRight,classVar + "$" + nestedtype.name,key,nestedtype));
 					});
 				});
-				Promise.all(promises).then((childidsets) => {
+				return Promise.all(promises).then((childidsets) => {
 					childidsets.every((childids,i) => {
 						const node = childnodes[i],
 							nestedtype = nestedtypes[i];
 						let ids = [];
-						childids.forEach((id) => {
+						childids.fastForEach((id) => {
 							//if(clsprefix && id.indexOf(clsprefix)!==0) { return; } // tests for $class
 							if(node[id]) {
-								ids = ids.concat(Object.keys(node[id][nestedtype.name]));
+								const tmpids = Object.keys(node[id][nestedtype.name]);
+								if(tmpids.length===0) {
+									delete node[id][nestedtype.name];
+								} else {
+									ids = ids.concat(tmpids);
+								}
 							}
 						});
 						ids = ids.filter((id) => { return !currentclass ||  id.indexOf(currentclass.name+"@")===0; });
 						results[classVar] = (results[classVar] ? intersection(results[classVar],ids) : intersection(ids,ids));
 						return results[classVar].length > 0;
 					});
-					if(results[classVar] && results[classVar].length===0) { resolve([]); return;}
+					if(results[classVar] && results[classVar].length===0) { return [];  } // resolve([]); return;
 					let promises = [];
 					
-					nodes.forEach((node,i) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
+					nodes.fastForEach((node,i) => { // db.select({name: {$o1: "name"}}).from({$o1: Object,$o2: Object}).where({$o1: {name: {$o2: "name"}}})
 						const join = joins[i];
 						if(!join) { return true; }
 						promises.push(join.rightClass.index.get(join.rightProperty))
 						promises.push(join.rightClass.index.get(join.rightProperty));
 					});
-					Promise.all(promises).then((rightnodes) => { // variable not used, promises just ensure nodes loaded for matching
+					return Promise.all(promises).then((rightnodes) => { // variable not used, promises just ensure nodes loaded for matching
 						if(!results[classVar]) {
 							results[classVar] = Object.keys(index.keys[keyProperty]).filter((id) => { return !currentclass || id.indexOf(currentclass.name+"@")===0; });;
 						}
@@ -1167,15 +1248,15 @@ SOFTWARE.
 								});
 							}
 							let leftids = [];
-							Object.keys(node).forEach((leftValue) => {
-								Object.keys(node[leftValue]).forEach((leftType) => {
+							Object.keys(node).fastForEach((leftValue) => {
+								Object.keys(node[leftValue]).fastForEach((leftType) => {
 									let innerleftids = Object.keys(node[leftValue][leftType]),
 										innerrightids = [],
 										some = false,
 										pnode = rightIndex.keys[rightProperty];
-									Object.keys(pnode).forEach((rightValue) => {
+									Object.keys(pnode).fastForEach((rightValue) => {
 										let vnode = pnode[rightValue];
-										Object.keys(vnode).forEach((rightType) => {
+										Object.keys(vnode).fastForEach((rightType) => {
 											if(join.test(Index.coerce(leftValue,leftType),Index.coerce(rightValue,rightType))) { 
 												some = true;
 												innerrightids = innerrightids.concat(Object.keys(vnode[rightType]));
@@ -1185,7 +1266,7 @@ SOFTWARE.
 									if(some) {
 										leftids = leftids.concat(innerleftids); // do we need to filter for class?
 										innerrightids = intersection(innerrightids,innerrightids);// do we need to filter for class?
-										innerleftids.forEach((id,i) => {
+										innerleftids.fastForEach((id,i) => {
 											restrictRight[cols[join.rightVar]][id] = (restrictRight[cols[join.rightVar]][id] ? intersection(restrictRight[cols[join.rightVar]][id],innerrightids) : innerrightids);  
 										});
 									}
@@ -1194,11 +1275,11 @@ SOFTWARE.
 							results[classVar] = (results[classVar] && leftids.length>0 ? intersection(results[classVar],leftids) : leftids);
 							return results[classVar] && results[classVar].length > 0;
 						});
-						if(results[classVar] && results[classVar].length>0) { resolve(results[classVar].filter((item) => { return exclude.indexOf(item)===-1; })); return; }
-						resolve([]);
+						if(results[classVar] && results[classVar].length>0) { return results[classVar].filter((item) => { return exclude.indexOf(item)===-1; }); }
+						return [];
 					});
 				});
-			});
+			//});
 		}
 		async put(object) {
 			const index = this,
@@ -1326,6 +1407,14 @@ SOFTWARE.
 		return value > testValue;
 	}
 	Index[">"] = Index.$gt;
+	Index.$search = function(value,testValue) {
+		if(!value) {
+			return false;
+		}
+		value = value.toLowerCase();
+		const tokens = testValue.split(" ");
+		return tokens.every((testValue) => value.indexOf(testValue)>=0);
+	}
 	
 	class Store {
 		constructor(name="Object",keyProperty="@key",db) {
@@ -1347,7 +1436,7 @@ SOFTWARE.
 			const me = this;
 			if(value && typeof(value)==="object") {
 				me.scope[value.constructor.name] = value.constructor;
-				Object.keys(value).forEach((property) => {
+				Object.keys(value).fastForEach((property) => {
 					me.addScope(value[property]);
 				});
 			}
@@ -1366,15 +1455,15 @@ SOFTWARE.
 				});
 				return promise;
 			}
-			return new Promise((resolve,reject) => {
-				promise.then(() => {
+			//new Promise((resolve,reject) => {
+				return promise.then(() => {
 					me.pending[key] = me.ready().then(() => action());
-					me.pending[key].then(() => {
+					return me.pending[key].then(() => {
 						delete me.pending[key];
-						resolve();
+						return; //resolve();
 					});
 				});
-			});
+			//});
 		}
 		get(key,action = () => {}) {
 			const me = this,
@@ -1401,23 +1490,23 @@ SOFTWARE.
 				});
 				return promise;
 			} 
-			return new Promise((resolve,reject) => {
-				promise.then(() => {
+			//return new Promise((resolve,reject) => {
+				return promise.then(() => {
 					me.pending[key] = me.ready().then(() => action());
-					me.pending[key].then((result) => {
+					return me.pending[key].then((result) => {
 						if(result) {
-							me.restore(result).then((result) => {
+							return me.restore(result).then((result) => {
 								me.data[key] = result;
-								resolve(result);
+								return result; //resolve(result);
 							});
 						} else {
 							delete me.data[key];
-							resolve(result);
+							return result; //resolve(result);
 						}
 						delete me.pending[key];
 					});
 				});
-			});
+			//});
 		}
 		normalize(value,recursing) {
 			const me = this,
@@ -1442,7 +1531,7 @@ SOFTWARE.
 					if(json instanceof Date) {
 						result.time = json.getTime();
 					}
-					Object.keys(json).forEach((key,i) => {
+					Object.keys(json).fastForEach((key,i) => {
 						if(typeof(json[key])!=="function") {
 							result[key] = me.normalize(json[key],true);
 						}
@@ -1469,18 +1558,18 @@ SOFTWARE.
 							me.scope[parts[0]] = cls = Function("return " + parts[0])();
 						} catch(e) {
 							const promises = [];
-							keys.forEach((property,i) => {
+							keys.fastForEach((property,i) => {
 								keymap[i] = property;
 								promises.push(me.restore(json[property],true,cache));
 							});
-							return new Promise((resolve,reject) => {
-								Promise.all(promises).then((results) => {
-									results.forEach((data,i) => {
+							//new Promise((resolve,reject) => {
+								return Promise.all(promises).then((results) => {
+									results.fastForEach((data,i) => {
 										json[keymap[i]] = data;
 									});
-									resolve(json);
+									return json; //resolve(json);
 								});
-							});
+							//});
 							
 						}
 					}
@@ -1507,50 +1596,50 @@ SOFTWARE.
 						}
 						const promises = [];
 						if(object && typeof(object)==="object") {
-							Object.keys(object).forEach((property,i) => {
+							Object.keys(object).fastForEach((property,i) => {
 								keymap[i] = property;
 								promises.push(me.restore(object[property],true,cache));
 							});
 						}
-						return new Promise((resolve,reject) => {
-							Promise.all(promises).then((results) => {
-								results.forEach((data,i) => {
+						//new Promise((resolve,reject) => {
+						return Promise.all(promises).then((results) => {
+								results.fastForEach((data,i) => {
 									instance[keymap[i]] = data;
 								});
-								resolve(instance);
+								return instance; //resolve(instance);
 							});
-						});
+						//});
 					} else if(json instanceof cls) {
 							const promises = [];
-							keys.forEach((property,i) => {
+							keys.fastForEach((property,i) => {
 								keymap[i] = property;
 								promises.push(me.restore(json[property],true,cache).catch((e) => { console.log(e); }));
 							});
-							return new Promise((resolve,reject) => {
-								Promise.all(promises).then((results) => {
-									results.forEach((data,i) => {
+							//new Promise((resolve,reject) => {
+								return Promise.all(promises).then((results) => {
+									results.fastForEach((data,i) => {
 										json[keymap[i]] = data;
 									});
-									resolve(json);
+									return json; //resolve(json);
 								});
-							});
+							//});
 					} else if(cls.fromJSON) {
 							return Promise.resolve(cls.fromJSON(json));
 					} else {
 						const instance = Object.create(cls.prototype),
 							promises = [];
-						keys.forEach((property,i) => {
+						keys.fastForEach((property,i) => {
 							keymap[i] = property;
 							promises.push(me.restore(json[property],true,cache));
 						});
-						return new Promise((resolve,reject) => {
-							Promise.all(promises).then((results) => {
-								results.forEach((data,i) => {
+					//return new Promise((resolve,reject) => {
+						return Promise.all(promises).then((results) => {
+								results.fastForEach((data,i) => {
 									instance[keymap[i]] = data;
 								});
-								resolve(instance);
+								return instance; //resolve(instance);
 							});
-						});
+					//	});
 					}
 				}
 			}
@@ -1570,15 +1659,15 @@ SOFTWARE.
 				});
 				return promise;
 			} 
-			return new Promise((resolve,reject) => {
-				promise.then(() => {
+			//return new Promise((resolve,reject) => {
+				return promise.then(() => {
 					me.pending[key] = me.ready().then(() => action(normalize ? me.normalize(value) : value));
-					me.pending[key].then((result) => {
+					return me.pending[key].then((result) => {
 						delete me.pending[key];
-						resolve();
+						return; //resolve();
 					});
 				});
-			});
+			//});
 		}
 	}	
 	class MemStore extends Store {
@@ -1588,7 +1677,7 @@ SOFTWARE.
 		}
 		async clear() {
 			const me = this;
-			Object.keys(me.data).forEach((key) => {
+			Object.keys(me.data).fastForEach((key) => {
 				delete me.data[key];
 			});
 			return true;
@@ -1714,7 +1803,7 @@ SOFTWARE.
 			db.clear = clear;
 			db.classes = {};
 			db.activate = activate;
-			Object.keys(options).forEach((key) => {
+			Object.keys(options).fastForEach((key) => {
 				db[key] = options[key];
 			});
 			
@@ -1727,7 +1816,7 @@ SOFTWARE.
 					me.projection = projection;
 					me.classNames = {};
 					Object.defineProperty(me,"classVars",{configurable:true,writable:true,value:classVars});
-					Object.keys(classVars).forEach((classVar) => {
+					Object.keys(classVars).fastForEach((classVar) => {
 						me.classNames[classVar] = me.classVars[classVar].name;
 					});
 					Object.defineProperty(me,"when",{configurable:true,writable:true,value:when});
@@ -1777,27 +1866,27 @@ SOFTWARE.
 						where(pattern) {
 							return {
 								exec() {
-									return new Promise((resolve,reject) => {
-										db.select().from(classVars).where(pattern).exec().then((cursor) => {
-											cursor.count().then((count) => {
+									//return new Promise((resolve,reject) => {
+										return db.select().from(classVars).where(pattern).exec().then((cursor) => {
+											return cursor.count().then((count) => {
 												if(count>0) {
 													const promises = [];
-													Object.keys(cursor.classVarMap).forEach((classVar) => {
+													Object.keys(cursor.classVarMap).fastForEach((classVar) => {
 														const i = cursor.classVarMap[classVar],
 															cls = classVars[classVar];
-														cursor.cxproduct.collections[i].forEach((id) => {
+														cursor.cxproduct.collections[i].fastForEach((id) => {
 															promises.push(cls.index.delete(id).catch((e) => { console.log(e); }));
 														});
 													});
-													Promise.all(promises).then((results) => {
-														resolve(results);
+													return Promise.all(promises).then((results) => {
+														return results; //resolve(results);
 													}).catch((e) => { console.log(e); });
 													return;
 												}
-												resolve([]);
+												return []; //resolve([]);
 											}); 
 										});
-									});
+									//});
 								}
 							}
 						}
@@ -1813,7 +1902,7 @@ SOFTWARE.
 					let classes;
 					if(arguments.length===1) {
 						classes = new Array(...objects);
-						classes.forEach((object,i) => {
+						classes.fastForEach((object,i) => {
 							classes[i] = cls;
 						});
 					} else {
@@ -1822,7 +1911,7 @@ SOFTWARE.
 					return {
 						exec() {
 							const activity = new Activity();
-							objects.forEach((object,i) => {
+							objects.fastForEach((object,i) => {
 								const cls = classes[i];
 								if(!cls.index) {
 									db.index(cls);
@@ -1836,7 +1925,7 @@ SOFTWARE.
 										} else {
 											instance = Object.create(cls.prototype);
 											Object.defineProperty(instance,"constructor",{configurable:true,writable:true,value:cls});
-											Object.keys(object).forEach((key) => {
+											Object.keys(object).fastForEach((key) => {
 												instance[key] = object[key];
 											});
 										}
@@ -1847,7 +1936,7 @@ SOFTWARE.
 									});
 							});
 							activity.step(() => {
-								activity.results.forEach((instance) => {
+								activity.results.fastForEach((instance) => {
 									stream(instance,db);
 								});
 							});
@@ -1857,7 +1946,7 @@ SOFTWARE.
 				},
 				exec() {
 					const classes = [];
-					objects.forEach((object) => {
+					objects.fastForEach((object) => {
 						classes.push(object.constructor);
 					})
 					return this.into(...classes).exec();
@@ -1933,7 +2022,7 @@ SOFTWARE.
 											activity = new Activity();
 										if(typeof(pattern)==="function") {
 											const classes = [];
-											Object.keys(classVars).forEach((key) => {
+											Object.keys(classVars).fastForEach((key) => {
 												classes.push(classVars[key]);
 											});
 											asynchronize(pattern(...classes)).then((rows) => {
@@ -1959,7 +2048,7 @@ SOFTWARE.
 												}
 											});
 										} else {
-											Object.keys(pattern).forEach((classVar) => {
+											Object.keys(pattern).fastForEach((classVar) => {
 												if(!classVars[classVar]) { 
 													return;
 												}
@@ -2001,8 +2090,11 @@ SOFTWARE.
 															return row.every((item,i) => {
 																const cls = classes[i],
 																classVar = matchvars[i];
-																if(classVar && cls.deferKeys) {
-																	return cls.deferKeys.every((key) => {
+																if(classVar) {
+																	const deferkeys = (cls.deferKeys ? cls.deferKeys : []),
+																		textkeys = (cls.fullTextKeys ? cls.fullTextKeys : []),
+																		keys = deferkeys.concat(textkeys);
+																	return keys.every((key) => {
 																		if(pattern[classVar] && pattern[classVar][key]) {
 																			const predicate = pattern[classVar][key],
 																				testname = Object.keys(predicate)[0],
@@ -2016,7 +2108,7 @@ SOFTWARE.
 																return true;
 															});
 														};
-													Object.keys(classVars).forEach((classVar) => {
+													Object.keys(classVars).fastForEach((classVar) => {
 														if(matches[classVar]) {
 															collections.push(matches[classVar]);
 															classes.push(classVars[classVar]);
@@ -2062,17 +2154,17 @@ SOFTWARE.
 						where(pattern) {
 							return {
 								exec() {
-									return new Promise((resolve,reject) => {
+									//return new Promise((resolve,reject) => {
 										const updated = {},
 											promises = [];
-										db.select().from(classVars).where(pattern).exec().then((cursor,matches) => {
+										return db.select().from(classVars).where(pattern).exec().then((cursor,matches) => {
 											const vars = Object.keys(classVars);
-											promises.push(cursor.forEach((row) => {
-												row.forEach((object,i) => {
+											promises.push(cursor.fastForEach((row) => {
+												row.fastForEach((object,i) => {
 													const classVar = vars[i];
 													let activated;
 													if(values[classVar])  {
-														Object.keys(values[classVar]).forEach((property) => {
+														Object.keys(values[classVar]).fastForEach((property) => {
 															let value = values[classVar][property];
 															if(value && typeof(value)==="object") {
 																const sourcevar = Object.keys(value)[0];
@@ -2094,10 +2186,10 @@ SOFTWARE.
 												});
 											}));
 										});
-										Promise.all(promises).then(() => {
-											resolve(Object.keys(updated).length);
+										return Promise.all(promises).then(() => {
+											return Object.keys(updated).length; //resolve(Object.keys(updated).length);
 										});
-									});
+									//});
 								}
 							}
 						}
@@ -2113,11 +2205,11 @@ SOFTWARE.
 						select(projection) {
 							const pattern = new db.Pattern(projection,classVars,whenPattern);
 							//	promise = new Promise((resolve,reject) => { pattern.resolver = resolve; pattern.rejector = reject; });
-							Object.keys(whenPattern).forEach((classVar) => {
+							Object.keys(whenPattern).fastForEach((classVar) => {
 								if(classVar[0]!=="$") { return; }
 								const cls = classVars[classVar];
 								if(!db.patterns[cls.name]) { db.patterns[cls.name] = {}; }
-								Object.keys(whenPattern[classVar]).forEach((property) => {
+								Object.keys(whenPattern[classVar]).fastForEach((property) => {
 									if(!db.patterns[cls.name][property]) { db.patterns[cls.name][property] = {}; }
 									if(!db.patterns[cls.name][property][pattern[db.keyProperty]]) { db.patterns[cls.name][property][pattern[db.keyProperty]] = {}; }
 									if(!db.patterns[cls.name][property][pattern[db.keyProperty]][classVar]) { db.patterns[cls.name][property][pattern[db.keyProperty]][classVar] = pattern; }
@@ -2135,6 +2227,7 @@ SOFTWARE.
 		}
 	}
 	ReasonDB.prototype.save = ReasonDB.prototype.insert;
+	ReasonDB.stopWords = ["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any","are","aren't","as","at","be","because","been","before","being","below","between","both","but","by","can't","cannot","could","couldn't","did","didn't","do","does","doesn't","doing","don't","down","during","each","few","for","from","further","had","hadn't","has","hasn't","have","haven't","having","he","he'd","he'll","he's","her","here","here's","hers","herself","him","himself","his","how","how's","i","i'd","i'll","i'm","i've","if","in","into","is","isn't","it","it's","its","itself","let's","me","more","most","mustn't","my","myself","no","nor","not","of","off","on","once","only","or","other","ought","our","ours","ourselves","out","over","own","same","shan't","she","she'd","she'll","she's","should","shouldn't","so","some","such","than","that","that's","the","their","theirs","them","themselves","then","there","there's","these","they","they'd","they'll","they're","they've","this","those","through","to","too","under","until","up","very","was","wasn't","we","we'd","we'll","we're","we've","were","weren't","what","what's","when","when's","where","where's","which","while","who","who's","whom","why","why's","with","won't","would","wouldn't","you","you'd","you'll","you're","you've","your","yours","yourself","yourselves"];
 	ReasonDB.Store = Store;
 	ReasonDB.MemStore = MemStore;
 	ReasonDB.LocalStore = LocalStore;

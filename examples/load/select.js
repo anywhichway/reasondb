@@ -41,7 +41,7 @@ function now() {
 let start =  now();
 db.select().from({$p: Person}).where({$p: {name: {$neq: null}}}).exec().then((cursor) => {
 	let end = now();
-	console.log("records/sec ", cursor.maxCount/((end-start)/1000));
+	console.log(cursor.maxCount,"records/sec ", cursor.maxCount/((end-start)/1000));
 });
 
 
