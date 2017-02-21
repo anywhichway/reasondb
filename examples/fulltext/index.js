@@ -14,7 +14,7 @@ if(typeof(window)==="undefined") {
 //Store data using localStorage. In the browser this is window.localStorage and the directory location is ignored.
 //On the server JSON files are created. The first argument `true` forces the creation of new storage and indexes each 
 //time the example is run, the second ensures objects are activated.
-let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.LocalStore,true,true,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient,levelUPClient:LevelUPClient});
+let db = new ReasonDB("./examples/basic/db","@key",ReasonDB.MemStore,true,true,{ironCacheClient:IronCacheClient,redisClient:RedisClient,memcachedClient:MemJSClient,levelUPClient:LevelUPClient});
 
 
 // Define a Book class. Classes are optional. ReasonDB can store items of type Object, Array, and Date by default.
@@ -26,8 +26,6 @@ class Book {
 }
 Book.fullTextKeys = ["summary"];
 
-
-// Insert Objects into the Person index casting it to a Person as it is inserted.
 db.insert(
 	new Book("JavaScript","This book is a very long book about how to code JavaScript applications."),
 	new Book("JavaScript","This book is a very short book on the history of JavaScript."),
