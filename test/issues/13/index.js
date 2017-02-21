@@ -17,7 +17,8 @@ Get document
 Observe that document has reverted to the last version before the first App relaunch
 */
 
-var ReasonDB = require("../../../src/index.js");
+const ReasonDB = require("../../../src/index.js");
+ReasonDB.JSONBlockStore = require("../../../src/drivers/JSONBlockStore.js")(ReasonDB);
 
 let db = new ReasonDB("./test/issues/13/database","@key",ReasonDB.JSONBlockStore,false,true),
 	doc = {test:0};
@@ -26,10 +27,12 @@ db.select().from({$o:Object}).where({$o: {test: {$gte: 0}}}).exec().then((cursor
 		cursor.forEach((row) => {
 			doc = row[0];
 			doc.test++;
+			Object.index.store.compress();
 			console.log("Verify that db/Object contains " + JSON.stringify(doc) + " then relaunch.");
 		});
 	} else {
 		db.insert(doc).into(Object).exec().then(() => {
+			Object.index.store.compress();
 			console.log("Verify that db/Object contains " + JSON.stringify(doc)  + " then relaunch.");
 		});
 	}
