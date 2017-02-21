@@ -22,11 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 (function() {
-	let _uuid, fs;
+	let _uuid;
 	if(typeof(window)==="undefined") {
 		let r = require;
 		_uuid = r("uuid");
-		fs = r("fs");
 	}
 	
 	const asynchronize = async (value) => {
@@ -70,7 +69,7 @@ SOFTWARE.
 			if(this.aborted) { return; }
 			const me = this,
 				step = me.steps[i],
-				steps = (Array.isArray(step) ? step : [step]);
+				steps = (Array.isArray(step) ? step : (step ? [step] : []));
 			steps.every((step) => {
 				if(!step) {
 					console.log("WARNING: undefined Activity step");
@@ -257,7 +256,7 @@ SOFTWARE.
 		}
 	}
 	class Cursor {
-		constructor(classes,cxProductOrRows,projection,classVars={}) {
+		constructor(classes,cxProductOrRows,projection,classVars={},defered) { // v0.3.0
 			const me = this;
 			me.classes = classes;
 			if(Array.isArray(cxProductOrRows)) {
@@ -268,6 +267,7 @@ SOFTWARE.
 			me.projection = projection;
 			me.classVarMap = {};
 			me.classVars = classVars;
+			me.defered = defered; // v0.3.0
 			Object.keys(classVars).forEach((classVar,i) => {
 				me.classVarMap[classVar] = i;
 			});
@@ -438,9 +438,12 @@ SOFTWARE.
 			const me = this;
 			if(me.rows) {
 				if(rowNumber<me.maxCount) {
+					const instances = me.rows[rowNumber]; //v0.3.0
 					let result;
+					if(me.defered && !me.defered(instances)) {
+						return result;
+					}
 					if(me.projection) {
-						let instances = me.rows[rowNumber];
 						result = {};
 						if(!Object.keys(me.projection).every((property) => {
 							let colspec = me.projection[property];
@@ -457,7 +460,7 @@ SOFTWARE.
 							return undefined;
 						}
 					} else {
-						result = me.rows[rowNumber];
+						result = instances;
 					}
 					return result;
 				}
@@ -476,6 +479,9 @@ SOFTWARE.
 						});
 						Promise.all(promises).then((instances) => {
 							let result;
+							if(me.defered && !me.defered(instances)) {
+								resolve();
+							}
 							if(me.projection) {
 								result = {};
 								if(!Object.keys(me.projection).every((property) => {
@@ -564,6 +570,7 @@ SOFTWARE.
 		constructor(cls,keyProperty="@key",db,StorageType=(db ? db.storageType : MemStore),clear=(db ? db.clear : false)) {
 			const me = this;
 			cls.index = me;
+			me.cls = cls; // v0.3.0
 			me.saveAsync = db.saveIndexAsync;
 			me.keys = {};
 			me.store = new StorageType(cls.name,keyProperty,db,clear);
@@ -612,6 +619,9 @@ SOFTWARE.
 			}
 			return indexkeys.filter((key) => {
 				if(object.constructor.skipKeys && object.constructor.skipKeys.indexOf(key)>=0) {
+					return false;
+				}
+				if(object.constructor.deferKeys && object.constructor.deferKeys.indexOf(key)>=0) {
 					return false;
 				}
 				return key!=="*";
@@ -952,7 +962,8 @@ SOFTWARE.
 			return results;
 		}
 		async match(pattern,classVars={},classMatches={},restrictRight={},classVar="$self",parentKey,nestedClass) {
-			const keys = Object.keys(pattern).filter((key) => { return key!="$class"; }),
+			const me = this,
+				keys = Object.keys(pattern).filter((key) => { return key!="$class" && (!me.cls.deferKeys || me.cls.deferKeys.indexOf(key)===-1); }),
 				literals = {},
 				tests = {},
 				nestedobjects = {},
@@ -960,6 +971,7 @@ SOFTWARE.
 				joins = {},
 				cols = {},
 				nodes = [];
+			//console.log(keys)
 			let results = classMatches,
 				currentclass = (pattern.$class ? pattern.$class : (nestedClass ? nestedClass : (classVars[classVar] ? classVars[classVar] : Object)));
 			if(typeof(currentclass)==="string") {
@@ -1263,9 +1275,24 @@ SOFTWARE.
 		return value==testValue || soundex(value)===soundex(testValue);
 	}
 	Index.$matches = function(value,testValue) {
-		return value.search(testValue)>=0;
+		return value && value.search && value.search(testValue)>=0;
+	}
+	Index.$contains = function(value,testValue) {
+		if(!value) {
+			return false;
+		}
+		if(value.indexOf) {
+			return value.indexOf(testValue)>=0;
+		}
+		if(value.includes) {
+			return value.includes(testValue);
+		}
+		return false;
 	}
 	Index.$in = function(value,testValue) {
+		if(!testValue) {
+			return false;
+		}
 		if(testValue.indexOf) {
 			return testValue.indexOf(value)>=0;
 		}
@@ -1299,7 +1326,7 @@ SOFTWARE.
 		return value > testValue;
 	}
 	Index[">"] = Index.$gt;
-		
+	
 	class Store {
 		constructor(name="Object",keyProperty="@key",db) {
 			this.name = name;
@@ -1553,7 +1580,7 @@ SOFTWARE.
 				});
 			});
 		}
-	}
+	}	
 	class MemStore extends Store {
 		constructor(name,keyProperty,db) {
 			super(name,keyProperty,db);
@@ -1581,475 +1608,13 @@ SOFTWARE.
 			return true;
 		}
 	}
-	class IronCacheStore extends Store {
-		constructor(name,keyProperty,db,clear) {
-			super(name,keyProperty,db);
-			this.ready(clear);
-		}
-		async clear() {
-			const me = this;
-			return new Promise((resolve,reject) => {
-				me.db.ironCacheClient.clearCache(me.name, function(err, res) {
-					if (err) {
-						resolve(false);
-					} else {
-						resolve(true);
-					}
-				});
-			});
-		}
-		async delete(key) {
-			const me = this;
-			return super.delete(key, () => new Promise((resolve,reject) => {
-				me.db.ironCacheClient.del(me.name, key, function(err, res) {
-					if (err) {
-						reject(err);
-					} else {
-						resolve(true);
-					}
-				});
-			}));
-		}
-		async get(key) {
-			const me = this;
-			return super.get(key,() => new Promise((resolve,reject) => {
-				me.db.ironCacheClient.get(me.name, key, function(err, res) {
-					if (err) {
-						resolve();
-					} else {
-						resolve(JSON.parse(res.value));
-					}
-				});
-			}));
-		}
-		async set(key,value,normalize) {
-			const me = this;
-			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
-				me.db.ironCacheClient.put(me.name, key, { value: JSON.stringify(normalized) }, function(err, res) {
-					if (err) {
-						reject(err);
-					} else {
-						resolve(true);
-					}
-				});
-			}));
-		}
-	}
-	class RedisStore extends Store {
-		constructor(name,keyProperty,db,clear) {
-			super(name,keyProperty,db);
-			this.storage = this.db.redisClient;
-			this.storage.delete = this.storage.del;
-			this.ready(clear);
-		}
-		async clear() {
-			const me = this;
-			return new Promise((resolve,reject) => {
-				const key = me.name + "." + me.keyProperty;
-				me.storage.hkeys(me.name, (err, values) => {
-					if (err) {
-						resolve();
-					} else {
-						if(values.length===0) {
-							resolve();
-						} else {
-							let multi = me.storage.multi();
-							values.forEach((id) => {
-								multi = multi.hdel(me.name, id, function(err, res) {
-									if (err) {
-										reject(err);
-									} else {
-										resolve(true);
-									}
-								})
-							});
-							multi.exec((err,replies) => {
-								if(err) {
-									console.log(err);
-									reject(err);
-								} else {
-									resolve(true);
-								}
-							});
-						}
-					}
-				});
-			});
-		}
-		async delete(key) {
-			const me = this;
-			return super.delete(key,() => new Promise((resolve,reject) => {
-				me.storage.hdel(me.name, key, (err, res) => {
-					if (err) {
-						reject(err);
-					} else {
-						resolve();
-					}
-				});
-			}));
-		}
-		async get(key) {
-			const me = this;
-			return super.get(key,() => new Promise((resolve,reject) => {
-				me.storage.hget(me.name, key, (err, value) => {
-					if (err) {
-						resolve();
-					} else {
-						if(!value) {
-							resolve();
-						} else {
-							resolve(JSON.parse(value));
-						}
-					}
-				});
-			}));
-		}
-		async set(key,value,normalize) {
-			const me = this;
-			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
-				me.storage.hset(me.name,key, JSON.stringify(normalized), (err, res) => {
-					if (err) {
-						reject(err);
-					} else {
-						resolve();
-					}
-				});
-			}));
-		}
-	}
-	class MemcachedStore extends Store {
-		constructor(name,keyProperty,db,clear) {
-			super(name,keyProperty,db);
-			this.storage = this.db.memcachedClient;
-			this.ready(clear);
-		}
-		async clear() {
-			const me = this;
-			return new Promise((resolve,reject) => {
-				const key = me.name + "." + me.keyProperty;
-				me.storage.get(key, (err,value) => {
-					if (err) {
-						resolve();
-					} else {
-						if(!value) {
-							resolve();
-						} else {
-							me.storage.delete(key, (err, res) => {
-								if (err) {
-									reject(err);
-								} else {
-									resolve(true);
-								}
-							});
-						}
-					}
-				});
-			});
-		}
-		async delete(key) {
-			const me = this;
-			return super.delete(key,() => new Promise((resolve,reject) => {
-				me.storage.delete(key, (err, res) => {
-					if (err) {
-						reject(err);
-					} else {
-						resolve(true);
-					}
-				});
-			}));
-		}
-		async get(key) {
-			const me = this;
-			return super.get(key,() => new Promise((resolve,reject) => {
-				me.storage.get(key, (err,value,key) => {
-					if (err) {
-						resolve();
-					} else {
-						if(!value) {
-							resolve();
-						} else {
-							resolve(JSON.parse(value));
-						}
-					}
-				});
-			}));
-		}
-		async set(key,value,normalize) {
-			const me = this;
-			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
-				me.storage.set(key,JSON.stringify(normalized), (err, res) => {
-					if (err) {
-						reject(err);
-					} else {
-						resolve(true);
-					}
-				});
-			}));
-		}
-	}
-	function blockString(block,encoding="utf8") {
-		return "[" + bytePadEnd(block[0]+"",20," ",encoding) + "," + bytePadEnd(block[1]+"",20," ",encoding) + "]";
-	}
-
-	function bytePadEnd(str,length,pad,encoding="utf8") {
-		const needed = length - Buffer.byteLength(str,encoding);
-		if(needed>0) {
-			return str + Buffer.alloc(needed," ",encoding).toString(encoding);
-		}
-		return str;
-	}
-
-	class JSONBlockStore extends Store {
-		constructor(name,keyProperty,db,clear) {
-			super(name,keyProperty,db);
-			this.path = db.name + "/" + name;
-			this.encoding = "utf8";
-			this.opened = false;
-			if(clear) {
-				this.clear();
-			}
-		}
-		open() { // also add a transactional file class <file>.json, <file>.queue.json, <file>.<line> (line currently processing), <file>.done.json (lines processed)
-			try {
-				this.freefd = fs.openSync(this.path + "/free.json","r+");
-			} catch(e) {
-				this.freefd = fs.openSync(this.path + "/free.json","w+");
-			}
-			try {
-				this.blocksfd = fs.openSync(this.path + "/blocks.json","r+"); // r+ block offsets and lengths for ids
-			} catch(e) {
-				this.blocksfd = fs.openSync(this.path + "/blocks.json","w+");
-			}
-			try {
-				this.storefd = fs.openSync(this.path + "/store.json","r+"); // the actual data
-			} catch(e) {
-				this.storefd = fs.openSync(this.path + "/store.json","w+");
-			}
-			const blocks = fs.readFileSync(this.path + "/blocks.json",this.encoding),  // {<id>:{start:start,end:end,length:length}[,...]}
-				freestat = fs.statSync(this.path + "/free.json"),
-				blocksstat = fs.statSync(this.path + "/blocks.json"),
-				storestat = fs.statSync(this.path + "/store.json");
-			let free = fs.readFileSync(this.path + "/free.json",this.encoding); // [{start:start,end:end,length:length}[,...]]
-			if(free.length===0) {
-				this.free = [];
-			} else {
-				free = free.trim();
-				if(free[0]===",") {
-					free = free.substring(1);
-				}
-				if(free[free.length-1]===",") {
-					free = free.substring(0,free.length-1);
-				}
-				this.free= JSON.parse("["+free+"]");
-			}
-			this.blocks = (blocks.length>0 ? JSON.parse(blocks) : {});
-			this.freeSize = freestat.size;
-			this.blocksSize = blocksstat.size;
-			this.storeSize = storestat.size;
-			this.opened = true;
-			return true;
-		}
-		alloc(length,encoding="utf8") {
-			const me = this;
-			let block;
-			if(!me.alloc.size) {
-				me.alloc.size = Buffer.byteLength(blockString([0,0],encoding),encoding);
-				me.alloc.empty = bytePadEnd("null",me.alloc.size," ",encoding);
-			}
-			for(var i=0;i<me.free.length;i++) {
-				block = me.free[i];
-				if(block && block[1]-block[0]>=length) {
-					let position = ((me.alloc.size+1) * i);
-					me.free[i] = null;
-					fs.writeSync(me.freefd,me.alloc.empty,position,encoding);
-					return block;
-				}
-			}
-			let start = (me.storeSize===0 ? 0 : me.storeSize+1);
-			return [start, start+length];
-		}
-		async clear() {
-			if(!this.opened) {
-				this.open();
-			}
-			fs.ftruncateSync(this.freefd);
-			fs.ftruncateSync(this.blocksfd);
-			fs.ftruncateSync(this.storefd);
-			this.freeSize = 0;
-			this.blocksSize = 0;
-			this.storeSize = 0;
-			this.free = [];
-			this.blocks = {};
-		}
-		compress() {
-			const me = this;
-			if(!me.opened) {
-				me.open();
-			}
-			let newfree = [];
-			me.freeSize = 0;
-			me.free.forEach((block,i) => {
-				if(block) {
-					newfree.push(block);
-					let str = blockString(block,me.encoding)+",";
-					fs.writeSync(me.freefd,str,me.freeSize,me.encoding);
-					me.freeSize += Buffer.byteLength(str,me.encoding);
-				}
-			});
-			me.free = newfree;
-			fs.ftruncateSync(me.freefd,me.freeSize);
-			me.blocksSize = 1;
-			me.storeSize = 0;
-			fs.writeSync(me.blocksfd,"{",0,me.encoding);
-			Object.keys(me.blocks).forEach((key,i) => {
-				let str = '"'+key+'":' + JSON.stringify(me.blocks[key])+",";
-				fs.writeSync(me.blocksfd,str,me.blocksSize,me.encoding);
-				me.blocksSize += Buffer.byteLength(str,me.encoding);		
-			});
-			fs.writeSync(me.blocksfd,"}",me.blocksSize-1,me.encoding);
-			fs.ftruncateSync(me.blocksfd,me.blocksSize);
-		}
-		async delete(id) {
-			const me = this;
-			if(!me.opened) {
-				me.open();
-			}
-			const block = me.blocks[id];
-			if(block) {
-				const blanks = bytePadEnd("",block[1]-block[0],me.encoding);
-				delete me.blocks[id];
-				fs.writeSync(me.storefd,blanks,block[0],"utf8"); // write blank padding
-				me.free.push(block);
-				let str = blockString(block,me.encoding)+",";
-				fs.writeSync(me.freefd,str,me.freeSize,me.encoding);
-				me.freeSize += Buffer.byteLength(str,me.encoding);
-				str = (me.blocksSize===0 ? '{' : ',')+'"'+id+'":null}';
-				const fposition = (me.blocksSize===0 ? 0 : me.blocksSize-1);
-				fs.writeSync(me.blocksfd,str,fposition,me.encoding);
-				me.blocksSize = fposition + Buffer.byteLength(str,me.encoding);
-			}
-		}
-		async get(id) {
-			const me = this;
-			if(!me.opened) {
-				me.open();
-			}
-			const block = me.blocks[id];
-			if(block) {
-				const buffer = Buffer.alloc(block[1]-block[0]);
-				fs.readSync(me.storefd,buffer,0,block[1]-block[0],block[0]);
-				const result = JSON.parse(buffer.toString());
-				return super.restore(result.value);
-			}
-		}
-		async set(id,data) {
-			const me = this;
-			if(!me.opened) {
-				me.open();
-			}
-			const block = me.blocks[id];
-			let str = '{"id":"'+id+'","value":'+JSON.stringify(data)+'}';
-			const blen = Buffer.byteLength(str, 'utf8');
-			if(block) { // if data already stored
-				if((block[0] + blen) - 1 < block[1]) { // and update is same or smaller
-					fs.writeSync(me.storefd,bytePadEnd(str,(block[1]-block[0]),me.encoding),block[0],me.encoding); // write the data with blank padding
-					return;
-				}
-			}
-			const freeblock = me.alloc(blen,me.encoding); // find a free block large enough
-			fs.writeSync(me.storefd,bytePadEnd(str,(freeblock[1]-freeblock[0]),me.encoding),freeblock[0]); // write the data with blank padding
-			me.storeSize = Math.max(freeblock[1],me.storeSize);
-			me.blocks[id] = freeblock; // update the blocks info
-			if(block) { // free old block which was too small, if there was one
-				fs.writeSync(me.storefd,bytePadEnd("",(block[1]-block[0])," "),block[0],me.encoding); // write blank padding
-				me.free.push(block);
-				str = blockString(block,me.encoding)+",";
-				fs.writeSync(me.freefd,str,me.freeSize,me.encoding);
-				me.freeSize += Buffer.byteLength(str,me.encoding);
-			}
-			str = (me.blocksSize===0 ? '{' : ',')+'"'+id+'":'+JSON.stringify(freeblock)+"}";
-			const fposition = (me.blocksSize===0 ? 0 : me.blocksSize-1);
-			fs.writeSync(me.blocksfd,str,fposition,me.encoding);
-			me.blocksSize = fposition + Buffer.byteLength(str,me.encoding);
-		}
-	}
-	class LevelUPStore extends Store {
-		constructor(name,keyProperty,db,clear) {
-			super(name,keyProperty,db);
-			this.storage = db.levelUPClient(db.name + "/" + name); //db.levelUPClient(db.name);
-			this.ready(clear);
-		}
-		async clear() {
-			const me = this,
-				promises = [];
-			let	resolver,
-				rejector;
-			const promise = new Promise((resolve,reject) => { resolver = resolve; rejector = reject; });
-			me.storage.createKeyStream().on("data", (key) => {
-				promises.push(me.delete(key,true));
-			}).on("end",() => {
-				Promise.all(promises).then(() => {
-					resolver(true);
-				});
-			}).on("error", () => {
-				rejector(err);
-			});
-			return promise;
-		}
-		async delete(key) {
-			const me = this;
-			return super.delete(key,() => new Promise((resolve,reject) => {
-				me.storage.del(key+".json",{},(err) => {
-					if(err) {
-						if(err.notFound) {
-							resolve(true);
-						} else {
-							reject(err);
-						}
-					} else {
-						resolve(true);
-					}
-				});
-			}));
-		}
-		async get(key) {
-			const me = this;
-			return super.get(key, () => new Promise((resolve,reject) => {
-				me.storage.get(key+".json",{},(err,value) => {
-					if(err) {
-						if(err.notFound) {
-							resolve();
-						} else {
-							reject(err);
-						}
-					} else if(!value) {
-						resolve();
-					} else {
-						resolve(JSON.parse(value));
-					}
-				});
-			}));
-		}
-		async set(key,value,normalize) {
-			const me = this;
-			return super.set(key,value,normalize,(normalized) => new Promise((resolve,reject) => {
-				me.storage.put(key+".json",JSON.stringify(normalized),{},(err) => {
-					if(err) {
-						reject(err);
-					} else {
-						resolve(true);
-					}
-				});
-			}));
-		}
-	}
 	class LocalStore extends Store {
 		constructor(name,keyProperty,db,clear) {
 			super(name,keyProperty,db);
 			if(typeof(window)!=="undefined") {
 				this.storage = window.localStorage;
 			} else {
-				let r = require,
+				const r = require,
 					LocalStorage = r("./LocalStorage.js").LocalStorage;
 				this.storage = new LocalStorage(db.name + "/" + name);
 			}
@@ -2140,8 +1705,8 @@ SOFTWARE.
 		constructor(name,keyProperty="@key",storageType,clear=false,activate=true,options={}) { // make the additional args part of a config object, add a config option for active or passive objects
 			const db = this;
 			if(typeof(storageType)==="undefined") {
-				console.log("WARNING: storageType undefined, defaulting to ReasonDB.MemStore.");
 				storageType=MemStore;
+				console.log("WARNING: Defaulting to MemStore");
 			}
 			db.name = name;
 			db.keyProperty = keyProperty;
@@ -2431,6 +1996,25 @@ SOFTWARE.
 																let prev = row[i-1];
 																return !restrictright[i][prev] || restrictright[i][prev].indexOf(item)>=0;
 															});
+														},
+														defered = (row) => {
+															return row.every((item,i) => {
+																const cls = classes[i],
+																classVar = matchvars[i];
+																if(classVar && cls.deferKeys) {
+																	return cls.deferKeys.every((key) => {
+																		if(pattern[classVar] && pattern[classVar][key]) {
+																			const predicate = pattern[classVar][key],
+																				testname = Object.keys(predicate)[0],
+																				value = predicate[testname],
+																				test = Index[testname];
+																			return test(item[key],value);
+																		}
+																		return true;
+																	});
+																}
+																return true;
+															});
 														};
 													Object.keys(classVars).forEach((classVar) => {
 														if(matches[classVar]) {
@@ -2438,7 +2022,7 @@ SOFTWARE.
 															classes.push(classVars[classVar]);
 														}
 													});
-													const cursor = new Cursor(classes,new CXProduct(collections,filter),projection,classVars);
+													const cursor = new Cursor(classes,new CXProduct(collections,filter),projection,classVars,defered);
 													if(select.limit>=0) {
 														cursor.page(select.page||1,select.limit).then((rows) => {
 															resolve(new Cursor(classes,rows));
@@ -2551,14 +2135,10 @@ SOFTWARE.
 		}
 	}
 	ReasonDB.prototype.save = ReasonDB.prototype.insert;
-	ReasonDB.LocalStore = LocalStore;
+	ReasonDB.Store = Store;
 	ReasonDB.MemStore = MemStore;
+	ReasonDB.LocalStore = LocalStore;
 	ReasonDB.LocalForageStore = LocalForageStore;
-	ReasonDB.IronCacheStore = IronCacheStore;
-	ReasonDB.RedisStore = RedisStore;
-	ReasonDB.MemcachedStore = MemcachedStore;
-	ReasonDB.LevelUPStore = LevelUPStore;
-	ReasonDB.JSONBlockStore = JSONBlockStore;
 	ReasonDB.Activity = Activity;
 	if(typeof(module)!=="undefined") {
 		module.exports = ReasonDB;

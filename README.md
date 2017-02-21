@@ -174,16 +174,18 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>", "<uniqueKeyName
 
 4) `ReasonDB.LocalForageStore` is built on-top of IndexedDB. It is slow and not recommended unless you need to store a lot of data in the browser. In fact, using a remote `ReasonDB.RedisStore` is generally faster. Configuring with this store will fallback to `ReasonBD.LocalStore` on NodeJS.
 
-5) `ReasonDB.IronCacheStore` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. Also,
+The drivers below can be loaded from the drivers directory as shown in their description. The require call returns an function which takes one argument that must be the ReasonDB class:
+
+5) `ReasonDB.IronCacheStore = require("ReasonDB/lib/drivers/IronCacheStore")(ReasonDB)` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. Also,
 unit testing has occassional tests that fail due to timing interactions with the iron-cache server, i.e. key updates are not
 complete prior to a request for an updated key originating on the client. It is not clear what causes this, i.e. if the cause is
 in ReasonDB code or the iron-cache architecture.
 
-6) `ReasonDB.RedisStore` - Create your Redis client before creating the database and pass it in as a property `redisClient` in the options object, e.g. `{redisClient: <theClient>}`. `<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration, but Redis values do not expire unless an expiration is specifically set.  ***Note:*** To limit package dependencies, `redis` is a dev dependency not a package dependency. If you wish to use `redis` you should make it part of your app package. 
+6) `ReasonDB.RedisStore = require("ReasonDB/lib/drivers/RedisStore")(ReasonDB)` - Create your Redis client before creating the database and pass it in as a property `redisClient` in the options object, e.g. `{redisClient: <theClient>}`. `<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration, but Redis values do not expire unless an expiration is specifically set.  ***Note:*** To limit package dependencies, `redis` is a dev dependency not a package dependency. If you wish to use `redis` you should make it part of your app package. 
 
-7) `ReasonDB.MemcachedStore` - Create your Memcached client before creating the database and pass it in as a property `memcachedClient` in the options object, e.g. `{memcachedClient: <theClient>}`.`<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration.  ***Note:*** To limit package dependencies, `memjs` (the Memcached client) is a dev dependency not a package dependency. If you wish to use `memjs` you should make it part of your app package.
+7) `ReasonDB.MemcachedStore = require("ReasonDB/lib/drivers/MemcachedStore")(ReasonDB)` - Create your Memcached client before creating the database and pass it in as a property `memcachedClient` in the options object, e.g. `{memcachedClient: <theClient>}`.`<nameOrPath>` is ignored because the name of the cache bucket is tied to client creation. No support is currently provided for addressing value expiration.  ***Note:*** To limit package dependencies, `memjs` (the Memcached client) is a dev dependency not a package dependency. If you wish to use `memjs` you should make it part of your app package.
 
-8) `ReasonDB.LevelUPStore` - Open your LevelUP database before creating the ReasonDB database and pass it in as a property `levelUPClient` in the options object, e.g. `{levelUPClient: <theDatabase>}`.`<nameOrPath>` is ignored because the name of the database is tied to LevelUP creation.
+8) `ReasonDB.LevelUPStore = require("ReasonDB/lib/drivers/LevelUPStore")(ReasonDB)` - Open your LevelUP database before creating the ReasonDB database and pass it in as a property `levelUPClient` in the options object, e.g. `{levelUPClient: <theDatabase>}`.`<nameOrPath>` is ignored because the name of the database is tied to LevelUP creation.
 
 All storage types are referenced in the example and test files, you just need to provide client creation credentials and change the ReasonDB constructor call to test them out.
  
@@ -226,6 +228,8 @@ ReasonDB supports both a pattern based query mechanism using the predicates belo
 *$echoes* - Implements soundex comparison, e.g. `{name:{$echoes:"Jo"}}` would match an object with `{name: "Joe"}`.
 
 *$matches* - Implements RegExp matching, e.g. `{name:{$matches: <RegExp>}}`. RegExp can either be a regular expression using shorthand notation, or a string that looks like a regular expression, i.e starts and ends with `/`.
+
+*$contains* - Similar to *$matches* but just supports strings not regular expressions.
 
 *$in* - Tests to see if a value is in the specified sequence, e.g. `{age:{$in:[24, 25]}}` only matches 24 and 25. Types must match.
 
@@ -399,6 +403,11 @@ ReasonDB supports the indexing of hidden and computed values. Just add an Array 
 `Array.indexKeys = ["length", "$max", "$min", "$avg", "*"]`
 
 ***Note*** Functions must be callable with no arguments or default values for all arguments.
+
+## Defering Evaluation And Skipping Indexing
+
+If you have properties with large values, e.g. long strings, you can eliminate them from indexing, but still query them using JOQULAR by adding them to a a class property called `.deferKeys`. Evaluation of predicates is then done against instantiated instances during currsor processing rather than during index matching. This will be slightly slower for queries return large data sets but will
+keep the size of the indexes smaller.
 
 ## Skipping Indexing
 
@@ -577,6 +586,9 @@ ReasonDB currently supports Isolation and Durabilty but is not yet [ACID complia
 Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
+
+2017-02-10 v0.3.0 Code base made more modular with respect to server side drivers. Drivers must now be loaded separately. See documentation above. Added a `deferKeys` option to classes that prevents
+a full index being created on a property but still allows the property to be queried using JOQULAR. Addressed a scoping issue with `JSONBlockStore` that prevented it from restoring classes properly in some situations.
 
 2017-02-10 v0.2.10 Fixed Issue 19.
 

@@ -11,12 +11,18 @@ if(typeof(window)==="undefined") {
 	//Promise = require("bluebird");
 	//Promise.longStackTraces();
 	ReasonDB = require("../lib/index.js");
+	ReasonDB.JSONBlockStore = require("../lib/drivers/JSONBlockStore")(ReasonDB);
+	ReasonDB.RedisStore = require("../lib/drivers/RedisStore")(ReasonDB);
+	ReasonDB.IronCacheStore = require("../lib/drivers/IronCacheStore")(ReasonDB);
+	ReasonDB.MemcachedStore = require("../lib/drivers/MemcachedStore")(ReasonDB);
+	ReasonDB.LevelUpStore = require("../lib/drivers/LevelUpStore")(ReasonDB);
 	let levelup = require("levelup");
 	LevelUPClient = levelup; //("./examples/basic/db");
 }
 
 function decaf() {
-	/*describe = function describe(name,group) {
+	console.log("Decafinating ...");
+	describe = function describe(name,group) {
 		console.log(name);
 		group.call({timeout:()=>{}});
 	};
@@ -30,7 +36,7 @@ function decaf() {
 			console.log(name,e);
 		}
 		setTimeout(() => { console.log((done.passed ? "Passed" : "Failed"),name); },2000)
-	};*/
+	};
 }
 
 let store = ReasonDB.LocalStore, // ReasonDB.MemStore,ReasonDB.LocalStore,ReasonDB.LocalForageStore,ReasonDB.IronCacheStore,ReasonDB.RedisStore,ReasonDB.MemcachedStore,ReasonDB.JSONBlockStore;
@@ -50,8 +56,9 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 			resolver = resolve;
 		}),
 		o1 = {oneEl:[1],emptyArray:[],name: "Joe", age:function() { return 24; }, birthday: new Date("01/15/90"), ssn:999999999, address: {city: "Seattle", zipcode: {base: 98101, plus4:1234}}},
-		p1= {name:"Mary",age:21,children:[1,2,3],skip:1};
+		p1= {name:"Mary",age:21,children:[1,2,3],skip:1,defer:"a long bit of text that should not be indexed"};
     Object.skipKeys = ["skip"];
+    Object.deferKeys = ["defer"];
 	if(clear) {
 		["Array","Date","Object","Pattern"].forEach((name) => {
 			if(store==ReasonDB.RedisStore) {
@@ -77,20 +84,27 @@ let db = new ReasonDB("./test/db","@key",store,clear,activate,{saveIndexAsync:tr
 			}
 		});
 		let a1 = {city:"Seattle",zipcode:{base:98101,plus4:1234}},
-			p2 = {wife:p1,name:"Joe",age:24,address:a1},
+			p2 = {wife:p1,name:"Joe",age:24,address:a1,defer:"a long bit of text that should not be indexed"},
 			p3 = {name:"Mary",birthday:new Date(1962,0,15)},
 			activity = new ReasonDB.Activity(resolver);
-		activity.step(() => i.put(o1));
+		activity.step(() => i.put(o1).catch((err) => console.log(err)));
 		activity.step(() => i.put(p2));
 		activity.step(() => i.put(p1));
 		activity.step(() => i.put(p3));
 		activity.step(resolver);
-		activity.exec();
+		activity.exec().then(() => {
+			resolver();
+		}).catch((err) => {
+			console.log(err);
+		});
 	} else {
 		resolver();
 	}
-
+promise.catch((err) => {
+	console.log(err);
+});
 promise.then((results) => {
+	console.log("Testing ...");
 	describe("test", function() {
 		describe("matches", function() {
 			it('{emptyArray: {length: 0}}',function(done) {
@@ -390,6 +404,12 @@ promise.then((results) => {
 					done(); 
 				});
 			});
+			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Mary"}, defer: {$contains: "long"}}})', function(done) {
+				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Mary"}, defer: {$contains: "long"}}}).exec().then((cursor) => { 
+					expect(cursor.maxCount).to.equal(2); 
+					done(); 
+				});
+			});
 			it('db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1)', function(done) {
 				db.select().from({$e1: Object}).where({$e1: {name: {$eq: "Joe"}}}).limit(1).exec().then((cursor) => { 
 					expect(cursor.maxCount).to.equal(1); 
@@ -459,8 +479,8 @@ promise.then((results) => {
 					done(); 
 				});
 			});
-			it('db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}})', function(done) {
-			 db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null},"@key": {$neq: {$p2: "@key"}}}}).exec().then((cursor) => {
+			it('db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null}, defer: {$contains: "long"},"@key": {$neq: {$p2: "@key"}}}})', function(done) {
+			 db.select().from({$p1: Object, $p2: Object}).where({$p1: {name: {$neq: null}, defer: {$contains: "long"}, "@key": {$neq: {$p2: "@key"}}}}).exec().then((cursor) => {
 				 cursor.count().then((cnt) => {
 					 expect(cnt>0).to.equal(true); 
 						done(); 
