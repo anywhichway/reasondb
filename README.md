@@ -597,6 +597,8 @@ Currently updates to object properties are indepedently saved to the database au
 
 ## Updates (reverse chronological order)
 
+2017-05-23 v0.3.2 Improved fastForEach
+
 2017-02-12 v0.3.1 Added full-text indexing and search. See `.fullTextKeys` and `$search` in documentation. Refactored 20 un-necessary nested Promises. Added fastForEach. Added minified version of `src/index.js` for Chrome and node v7.x users.
 
 2017-02-10 v0.3.0 Code base made more modular with respect to server side drivers. Drivers must now be loaded separately. See documentation above. Added a `deferKeys` option to classes that prevents

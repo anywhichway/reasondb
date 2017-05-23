@@ -31,7 +31,7 @@ SOFTWARE.
 	Object.defineProperty(Array.prototype,"fastForEach",{value: function(f) {
 		const len = this.length;
 		if(f.length===1) {
-			for(let i in this) { i < len && f(this[i]); }
+			for(let i=0;i<len;i++) { i < len && f(this[i]); }
 		} else {
 			for(let i=0;i<len;i++) { f(this[i],i,this); }
 		}
