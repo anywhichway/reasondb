@@ -2,7 +2,7 @@
 
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/63a0d8f9cb0a4d14a9a2a44ffda76369)](https://www.codacy.com/app/syblackwell/reasondb?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=anywhichway/reasondb&amp;utm_campaign=Badge_Grade)
 
-The first 100% native JavaScript automatically synchronizing object database with a SQL like syntax (JOQULAR) and swapable persistence engines for the browser or NodeJS. ReasonDB also supports full text indexing and search, JSON projections or live object result sets, pattern based and functional queries, asynchronous cursors, streaming analytics, 20 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, built in statistical sampling, and configurable unique id properties in as little as 50K.
+The first 100% native JavaScript automatically synchronizing object database with a SQL like syntax (JOQULAR) and swappable persistence engines for the browser or NodeJS. ReasonDB also supports full text indexing and search, JSON projections or live object result sets, pattern based and functional queries, asynchronous cursors, streaming analytics, 20 built-in predicates (including soundex and RegExp matching), in-line fat arrow predicates, predicate extensibility, indexable computed values, fully indexed Dates and Arrays including array summaries, joins, nested matching, built in statistical sampling, and configurable unique id properties in as little as 50K.
 
 ReasonDB does not require that the class of objects stored be a subclass of any other class, nor does it require objects provide a special calling interface. ReasonDB is probably more compatible with existing object models than any other JSON database. All objects inserted to the database are activated, e.g.
 
@@ -55,7 +55,7 @@ NodeJS 7.x users can use the version in the src directory so long as the --harmo
 
 The ReasonDB query language JOQULAR (JavaScript Object Query Language Representation) is designed to look and behave like SQL; however it also supports nested objects, the return of matching JavaScript instances, and streaming analytics. 
 
-Unlike other object databases, the JavaScipt objects used with ReasonDB do not have to be subclassed from a special root class. You can even use  direct instances of Object! No special calling interfaces are required of the objects to be stored.
+Unlike other object databases, the JavaScript objects used with ReasonDB do not have to be subclassed from a special root class. You can even use  direct instances of Object! No special calling interfaces are required of the objects to be stored.
 
 Below are examples of each primary operation supported drawn from code in the `examples/basic/index.js` file:
 
@@ -142,7 +142,7 @@ Promise.all([
 
 Review other files in the example directory or the unit tests under the test directory for more examples. Examples and unit tests can be run in the browser by loading the index.html file. The same examples and tests can be run in node.js by executing the index.js file from the command line, e.g. `node test/index.js`.
 
-**Note**: Mocha and Instanbul currently break with ReasonDB under NodeJS even though they work in the browser. Test code is "decaffinated" prior to executing in NodeJS.
+**Note**: Mocha and Istanbul currently break with ReasonDB under NodeJS even though they work in the browser. Test code is "decaffinated" prior to executing in NodeJS.
 
 ## Document Notation
 
@@ -152,7 +152,7 @@ The notation below uses the following conventions:
 
 2) Optional elements are further surrounded by square brackets, e.g. `[< >]`.
 
-3) Elipses, `...`, indicates the immediately previous form can be repeated.
+3) Ellipsis, `...`, indicates the immediately previous form can be repeated.
 
 ## Creating A Database
 
@@ -162,7 +162,7 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>", "<uniqueKeyName
 
 `<uniqueKeyName>` - The property to add to objects to uniquely identify them. Using anything other than "@key" has not been heavily tested at this point.
 
-`<storageType>` - The currently available storage types are listed below. **Note***: For all storage types except MemStrore, LocalStore, and LocalForageStore you will need to install the associated npm packages for production. They are only listed as dev dependencies in the ReasonDB/package.json file. This keeps the primary ReasonDB code smaller.
+`<storageType>` - The currently available storage types are listed below. **Note***: For all storage types except MemStore, LocalStore, and LocalForageStore you will need to install the associated npm packages for production. They are only listed as dev dependencies in the ReasonDB/package.json file. This keeps the primary ReasonDB code smaller.
 
 1) `ReasonDB.JSONBlockStore` provides a high-speed server based disk store for NodeJS that can be manually inspected using a regular JavaScript editor. `<nameOrPath>` is a path relative to the execution context of NodeJS where data should be stored. **Note**: Although the files can be inspected using an editor, they should not be edited. The records are legal JSON, but they are also stored in fixed length blocks which can be corrupted by editing.
 
@@ -175,7 +175,7 @@ The ReasonDB constructor signature is: `ReasonDB("<nameOrPath>", "<uniqueKeyName
 The drivers below can be loaded from the drivers directory as shown in their description. The require call returns an function which takes one argument that must be the ReasonDB class:
 
 5) `ReasonDB.IronCacheStore = require("ReasonDB/lib/drivers/IronCacheStore")(ReasonDB)` - Create your IronCache client before creating the database and pass it in as a property `ironCacheClient` in the options object, e.g. `{ironCacheClient: <theClient>}`. `<nameOrPath>` is ignored. No support is currently provided for addressing value expiration. ***Note:*** To limit package dependencies, `iron-cache` is a dev dependency not a package dependency. If you wish to use `iron-cache` you should make it part of your app package. Also,
-unit testing has occassional tests that fail due to timing interactions with the iron-cache server, i.e. key updates are not
+unit testing has occasional tests that fail due to timing interactions with the iron-cache server, i.e. key updates are not
 complete prior to a request for an updated key originating on the client. It is not clear what causes this, i.e. if the cause is
 in ReasonDB code or the iron-cache architecture.
 
@@ -193,7 +193,7 @@ See [Extending ReasonDB](#extending) for how to [add new storage types](#addStor
 
 `clear` - Clear storage when creating the database.
 
-`activate` - Activate objects to automatically update the database and indexes when changed. `false` dooes not currently work but is under development.
+`activate` - Activate objects to automatically update the database and indexes when changed. `false` does not currently work but is under development.
 
 `options` - See storage types above for the only current options, which are instantiated storage clients. Additionally, inserts can be made fasters by setting `{saveIndexAsync:true}` in the options object. When set to true, indexes are only saved during otherwise idle time rather than after each update.
 
@@ -269,7 +269,7 @@ db.insert(p1).exec().then(() => {
 });
 ```
 
-A future release will support an optional second boolean argument to the `into` subclause indicating inserted objects should be passive. This will require they be updated using explict update commands.
+A future release will support an optional second boolean argument to the `into` subclause indicating inserted objects should be passive. This will require they be updated using explicit update commands.
 
 ### Delete
 
@@ -281,14 +281,14 @@ See Patterns above for a description of the `where` clause.
 
 Deleting an object from the database removes its unique key and removes it from its index and the persistent store.
 
-Single objects can also be deleted direclty using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
+Single objects can also be deleted directly using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
 
 <a name="select></a>
 ### Select
 
 `db.select([<projection>])[.first(number) | .random(number) | .sample(confidence,range)].from({<classVariable>: <class>[,...]}).where(<pattern>|<function>).exec().then((cursor) => { <function body> });`. `then` is chainable as a Promise. `cursor` is an instance of a [Cursor](#cursors).
 
-A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionaly provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the [Cursors](#cursors)  documentation for more details.
+A Cursor has three iterating methods, `forEach(<function>)`, `some(<function>)`, `every(<function>)`. These work in a manner similar to the standard JavaScript iteration functions. `<function>` can be a normal function or a fat arrow function. It can return a value or a Promise. The signature is `(row,rowNumber,cursor)`. `row` will either be an array of objects in the order specified in the `from` clause or a single object created from the row created using an optionally provided `<projection>`. All the methods are asynchronous and return Promises. Cursors also have a retriever `get(index)`, and a computational method, `count` and a data element `maxCount`. See the [Cursors](#cursors)  documentation for more details.
 
 In order to optimize memory and speed, except in the case of functional queries, objects are not retrieved from the database until a cursor row is accessed. Furthermore, the cursor is implemented using a smart crossproduct engine with row instantiation join restrictions. As a result, the actual number of non-empty rows may be less than `maxCount` and there is no way to get the actual count without looping through all records; hence `count` is implemented as a function. The iteration methods skip over empty rows so the programmer may experience jumps in the `rowNumber`. If there is only a need to process a limited number of records, then using `some` or `every` with a test to break the loop is far more efficient than first calling `count()`.
 
@@ -308,7 +308,7 @@ See [Patterns](#patterns) above for a general description of `<pattern>` in the 
 
 #### Functional Queries
 
-To create a functional query, provide `<function>` in the `where` clause rather than `<pattern>`. The function must return an an array of rows of objects, i.e. array of arrays. The column order of the row arrays should match that of the passed in classes. ReasonDB continues to manage projections and statistical sampling or row count limits. The function will be passed all the classes named in the `from` clause. The class indecies can be accessed from within the query function, or the program can use its own mechanisms for keeping track of instances.
+To create a functional query, provide `<function>` in the `where` clause rather than `<pattern>`. The function must return an an array of rows of objects, i.e. array of arrays. The column order of the row arrays should match that of the passed in classes. ReasonDB continues to manage projections and statistical sampling or row count limits. The function will be passed all the classes named in the `from` clause. The class indices can be accessed from within the query function, or the program can use its own mechanisms for keeping track of instances.
 
 #### Projections
 
@@ -335,13 +335,13 @@ Select statements can join data from across classes in the `where` and `when` cl
  
  Additionally, join restrictions should be placed on the left side of the join. The below permutation of the first join above will not return expected results.
  
-  `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$neq: null}}, $o: {name: {$p: "name}}})`.
+  `db.select().from({$p: Person, $o: Object}).where({$p: {name: {$neq: null}}, $o: {name: {$p: "name"}}})`.
   
 Only two way joins have been tested in the current release v0.x.x.
  
 ### When - Streaming Analytics
 
-`db.when(<pattern>).from({<classVariable>: <class>[, ...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked mutiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
+`db.when(<pattern>).from({<classVariable>: <class>[, ...]}).select([<projection>]).then((cursor) => { <function body> });`. `then` is not currently chainable like Promise. Also unlike a Promise, it can be invoked multiple times. `cursor` is an instance of a Cursor (see explanation above under ### Select).
 
 Whenever `<pattern>` is matched based on new data being inserted or existing data being changed, the function specified in `then` will be invoked.
 
@@ -352,12 +352,12 @@ As noted above, changes to objects already inserted into the database result in 
 
 `db.update({<classVariable>: <class>[, ...]}).set({<classVariable>: {property: <value | {<classVariable>: "<property>"}> [, ...]} [, ...]}).where(<pattern>).exec()`
 
-For exampe: `db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null}, "@key": {$neq: {$p2: "@key"}}}})` pairs Persons and adds partner names.
+For example: `db.update({$p1: Person, $p2: Person}).set({$p1: {partner: {$p2: "name"}}, $p2: {partner: {$p1: "name"}}}).where({$p1: {name: {$neq: null}, "@key": {$neq: {$p2: "@key"}}}})` pairs Persons and adds partner names.
 
 
 ### Direct Index Use
 
-The indecies associated with each class can be accessed via a `.index` property on the class. Instance keys can be looked-up by using an asynchronous match method, e.g.
+The indices associated with each class can be accessed via a `.index` property on the class. Instance keys can be looked-up by using an asynchronous match method, e.g.
 
 `Person.index.match({name: {$eq: "Joe"}}).then((result) => {  })`
 
@@ -371,7 +371,7 @@ The return keys can be resolved all at once with a call to `.instances`, e.g.:
 
 Alternatively, objects can be retrieved with `.get`, e.g.
 
-`<class>.index.get(uniqeKey).then((object) => { })`
+`<class>.index.get(uniqueKey).then((object) => { })`
 
 Single objects can be deleted directly using `<class>.index.delete(<object id>)`. Deleting from the index also deletes the persisted data.
 
@@ -394,7 +394,7 @@ Invoking Array modification functions such as `push`, `splice`, etc. forces re-i
 
 All properties equivalent to the get methods on Date objects are indexed, e.g. getMonth can be matched as `{month: <some month>}` and getUTCMonth as `{UTCMonth: <some month>}`.
 
-Invokving date modification functions such as `setTime` forces re-indexing of the modified Date.
+Invoking date modification functions such as `setTime` forces re-indexing of the modified Date.
 
 ## Advanced Use
 
@@ -406,9 +406,9 @@ ReasonDB supports the indexing of hidden and computed values. Just add an Array 
 
 ***Note*** Functions must be callable with no arguments or default values for all arguments.
 
-## Defering Evaluation And Skipping Indexing
+## Deferring Evaluation And Skipping Indexing
 
-If you have properties with large values, e.g. long strings, you can eliminate them from indexing, but still query them using JOQULAR by adding them to a a class property called `.deferKeys`. Evaluation of predicates is then done against instantiated instances during currsor processing rather than during index matching. This will be slightly slower for queries return large data sets but will
+If you have properties with large values, e.g. long strings, you can eliminate them from indexing, but still query them using JOQULAR by adding them to a a class property called `.deferKeys`. Evaluation of predicates is then done against instantiated instances during cursor processing rather than during index matching. This will be slightly slower for queries return large data sets but will
 keep the size of the indexes smaller.
 
 ## Skipping Indexing
@@ -438,7 +438,7 @@ Here is the definition of the RegExp predicate:
 
 `Index.$matches = function(value, testValue) { return value.search(testValue)>=0; }`
 
-Just choose a predicate name, it must start with a `$`, and add it as a class property to `Index` with the value being a boolean function taking two arguments. The first argument will be the value stored in the index, the second value will be the value extracted from the patterns used in `where` and `when` clauses of JOQULAR qeuries. The first value will always be a primitive, i.e. `number`, `string`, or `boolean`.
+Just choose a predicate name, it must start with a `$`, and add it as a class property to `Index` with the value being a boolean function taking two arguments. The first argument will be the value stored in the index, the second value will be the value extracted from the patterns used in `where` and `when` clauses of JOQULAR queries. The first value will always be a primitive, i.e. `number`, `string`, or `boolean`.
 
 <a name="addStorage"></a>
 ### Adding Storage Types and Persistence Engines
@@ -465,7 +465,7 @@ class <StoreName> extends Store {
   }
   async get(key) {
     // Return the data associated with the key as an object and undefined if the key does not exists.
-    // The superclass will handle resolving referencs to other classes.
+    // The superclass will handle resolving references to other classes.
     return super.get(key, () => new Promise((resolve, reject) => { < insert code here> resolve(object); }));
   }
   async set(key, value, normalize) {
@@ -520,9 +520,9 @@ For example:
 is an index for the below three objects:
 
 ```javascript
-{indentifier: "Joe", age: 21, @key: "Person@1"}
-{indentifier: "Joe", age: 24, @key: "Person@3"}
-{indentifier: "Mary", age: 21, @key: "Person@2"}
+{identifier: "Joe", age: 21, @key: "Person@1"}
+{identifier: "Joe", age: 24, @key: "Person@3"}
+{identifier: "Mary", age: 21, @key: "Person@2"}
 ```
 
 For storage, indexes are partitioned by property into KeyValue stores with `<className>.<property>` being the key and the rest of the index node being the value. Objects are just stored using their primary key. This means that almost any KeyValue store can be used as a persistence engine for ReasonDB.
@@ -532,9 +532,9 @@ Continuing with the above example, the below is pseudocode for how ReasonDB hand
 ```javascript
 store.set("Person.identifier", {Joe: {string: {Person@1: true, Person@3: true}}, {Mary: {string: {Person@2: true}});
 store.set("Person.age", age: {21: {number: {Person@1: true, Person@2: true}}, {24: {number: {Person@3: true}});
-store.set("Person@1", {indentifier: "Joe", age: 21, @key: "Person@1"});
-store.set("Person@3", {indentifier: "Joe", age: 24, @key: "Person@3"});
-store.set("Person@2", {indentifier: "Mary", age: 21, @key: "Person@2"});
+store.set("Person@1", {identifier: "Joe", age: 21, @key: "Person@1"});
+store.set("Person@3", {identifier: "Joe", age: 24, @key: "Person@3"});
+store.set("Person@2", {identifier: "Mary", age: 21, @key: "Person@2"});
 ```
 
 Full-text indexes have a similar structure and use tokens that have all vowels removed for compression. A future version will support the choice of un-compressed tokens, vowel compressed tokens, and trigrams. Exact matching of terms is done within the Cursor as though the text property were a deferd key.
@@ -591,9 +591,9 @@ The codebase is currently light on error handling and test coverage is only at 4
 
 Only two way joins are currently supported.
 
-ReasonDB currently supports Isolation and Durabilty but is not yet [ACID compliant](https://en.wikipedia.org/wiki/ACID). However, there is nothing in the architecture that will prevent it from being ACID for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which case it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some type of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
+ReasonDB currently supports Isolation and Durability but is not yet [ACID compliant](https://en.wikipedia.org/wiki/ACID). However, there is nothing in the architecture that will prevent it from being ACID for some storage engines. It is currently possible for an object to be written to the database and have a power failure prior to index updates, in which case it will look like the object is not in the database until some type of recovery process is run to index the object. It is also possible for an object to be deleted from an index and have a power failure prior to it being deleted from disk. If some type of recovery process is then run, the object will "magically" re-appear in the index. The first ACID support is likely to be with JSONBlockStore.
 
-Currently updates to object properties are indepedently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
+Currently updates to object properties are independently saved to the database automatically; hence, it is not possible to treat a set of changes to an object as a single transaction. This will be a addressed in a subsequent release by extensions to the `insert` command that will prevent object activation and require explicit database updates to commit changes.
 
 ## Updates (reverse chronological order)
 
