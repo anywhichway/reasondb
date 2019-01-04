@@ -1,0 +1,2 @@
+{"type":"json","key":"/Object/name"}
+"{\"path\":\"/Object/name\",\"edges\":{\"\\\"mary\\\"\":true,\"\\\"joe\\\"\":true},\"acls\":{\"r\":{\"a\":{},\"d\":{}},\"w\":{\"a\":{},\"d\":{}}}}"

@@ -1,0 +1,2 @@
+{"type":"json","key":"/Object"}
+"{\"path\":\"/Object\",\"edges\":{\"2\":true,\"3\":true,\"expireAt\":true,\"city\":true,\"zipcode\":true,\"base\":true,\"plus4\":true,\"createdAt\":true,\"modifiedAt\":true,\"expires\":true,\"children\":true,\"#\":true,\"version\":true,\"atomic\":true,\"count\":true,\"address\":true},\"acls\":{\"r\":{\"a\":{},\"d\":{}},\"w\":{\"a\":{},\"d\":{}}}}"

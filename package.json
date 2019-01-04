@@ -1,71 +1,61 @@
 {
-  "name": "reasondb",
-  "version": "0.3.2",
-  "description": "A 100% JavaScript browser/nodejs object database with SQL like query syntax and swapable persistence engines, full text indexing and search, plus streaming analytics, 18 built-in predicates, in-line fat arrow predicates, predicate extensibility, indexed Dates and Arrays, joins, nested matching in as little as 70K.",
-  "main": "lib/index.js",
-  "client": "./browser/reasondb.js",
-  "reveal": true,
-  "isomorphic": false,
-  "scripts": {
-    "test": "keys.bat && istanbul cover node_modules/mocha/bin/_mocha --report lcov -- -R spec && cat coverage/lcov.info | node_modules\\.bin\\codacy-coverage && rm -rf coverage",
-    "build": "cp src/LocalStorage.js lib/LocalStorage.js && npm run browserify",
-    "browserify": "browserify lib/index.js -o browser/reasondb.js",
-    "prepublish": "npm run build"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/anywhichway/reasondb.git"
-  },
-  "keywords": [
-    "CouchDB",
-    "PouchDB",
-    "Firebase",
-    "MongoDB",
-    "Cloudbase",
-    "CloudDB",
-    "JOQULAR",
-    "JSON",
-    "database",
-    "Realm",
-    "Redis",
-    "Memcached",
-    "IronCache",
-    "levelup",
-    "leveldown",
-    "Localstorage"
-  ],
-  "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/anywhichway/reasondb/issues"
-  },
-  "homepage": "https://github.com/anywhichway/reasondbl#readme",
-  "devDependencies": {
-    "babel-cli": "^6.16.0",
-    "babel-plugin-transform-runtime": "^6.15.0",
-    "babel-preset-latest": "^6.16.0",
-    "babelify": "^7.3.0",
-    "blanket": "^1.2.3",
-    "bluebird": "^3.3.5",
-    "browserify": "^13.0.0",
-    "chai": "^3.4.1",
-    "codacy-coverage": "^2.0.0",
-    "codeclimate-test-reporter": "^0.2.0",
-    "iron-cache": "^0.3.0",
-    "istanbul": "^0.4.2",
-    "leveldown": "^1.5.0",
-    "levelup": "^1.3.3",
-    "localforage": "^1.4.3",
-    "memjs": "^0.10.0",
-    "mocha": "^2.3.4",
-    "redis": "^2.6.2",
-    "uglify-js": "^2.7.5"
-  },
-  "dependencies": {
-    "babel-runtime": "^6.11.6",
-    "graceful-fs": "^4.1.9",
-    "localforage": "^1.4.3",
-    "uuid": "^3.0.0",
-    "write-file-atomic": "^1.2.0"
-  }
+	"name": "reasondb",
+	"version": "1.0.1b",
+	"description": "A JavaScript schema optional extensible key-value backed datastore supporting element level security, triggers, query pipelines, graphs, objects, documents, and joins.",
+	"private": false,
+	"isomorphic": true,
+	"keywords": [
+		"CouchDB",
+		"database",
+		"Elasticsearch",
+		"Firebase",
+		"idbkvstore",
+		"IronCache",
+		"Localstorage",
+		"Memcached",
+		"MongoDB",
+		"PouchDB",
+		"Redis",
+		"fulltext",
+		"pipeline",
+		"trigram"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/anywhichway/reasondb.git"
+	},
+	"scripts": {
+		"start:dev": "webpack-dev-server"
+	},
+	"dependencies": {
+		"esm": "^3.0.84",
+		"ioredis": "^4.3.0",
+		"js-sha3": "^0.7.0",
+		"nano-pipe": "0.0.6",
+		"node-fetch": "^1.7.1"
+	},
+	"devDependencies": {
+		"babel-plugin-transform-runtime": "^6.23.0",
+		"babel-preset-env": "^1.7.0",
+		"babel-register": "^6.26.0",
+		"benchtest": "^1.0.0",
+		"blockstore": "^0.1.7",
+		"chai": "^4.1.0",
+		"doctyr": "0.0.3-b",
+		"idb-kv": "^1.2.5",
+		"idb-kv-store": "^4.3.1",
+		"kvvs": "0.0.1-a",
+		"localforage": "^1.7.2",
+		"mocha": "^3.4.2",
+		"redis": "^2.8.0",
+		"scattered-store": "^1.0.0",
+		"webpack": "^4.28.3",
+		"webpack-cli": "^3.1.2",
+		"webpack-dev-server": "^3.1.14",
+		"webpack-node-externals": "^1.7.2"
+	},
+	"engines": {
+		"node": ">=9.x"
+	}
 }

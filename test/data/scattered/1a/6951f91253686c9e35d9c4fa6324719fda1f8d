@@ -1,0 +1,2 @@
+{"type":"json","key":"/Object/address"}
+"{\"path\":\"/Object/address\",\"edges\":{\"Object@c4d7323d-f330-490d-f395-1d8f2a99b8fd\":true,\"city\":true,\"Object@6bd0b04f-82a7-4571-d829-11bdaeffe352\":true,\"zipcode\":true,\"Object@TLu2pyYTIBHX0WsvjCpCP\":true,\"Object@CPCkmnmzWWiR5JDSA6mWb\":true},\"acls\":{\"r\":{\"a\":{},\"d\":{}},\"w\":{\"a\":{},\"d\":{}}}}"

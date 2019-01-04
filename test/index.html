@@ -2,31 +2,32 @@
 <head>
 <meta charset="utf-8">
 <link rel="stylesheet" media="all" href="../node_modules/mocha/mocha.css">
-<script src="../node_modules/mocha/mocha.js" type="text/javascript"></script>
-<script src="../node_modules/chai/chai.js" type="text/javascript"></script>
+<script src="../node_modules/chai/chai.js"></script>
+<script src="../node_modules/mocha/mocha.js"></script>
+<script src="../node_modules/idb-kv-store/idbkvstore.min.js" type="text/javascript"></script>
+<!-- script src="../node_modules/idb-kv/index.js" type="text/javascript"></script -->
+<script src="../node_modules/benchtest/browser/benchtest.js" type="text/javascript"></script>
 <script src="../node_modules/localforage/dist/localforage.js"></script>
-<script src="../lib/uuid.js"></script>
-<!-- script src="../node_modules/bluebird/js/browser/bluebird.js"></script -->
-<!-- script src="../node_modules/blanket/dist/qunit/blanket.min.js" data-cover-adapter="mocha-blanket.js"></script -->
-<script src="../browser/reasondb.js" data-cover></script>
-<!-- script src="../src/index.js" data-cover></script -->
-<!-- script src="../src/index.min.js" data-cover></script-->
+<script src="../worker-proxy.js"></script>
 
+	
 </head>
 <body>
-Test cases populate localStorage in Chrome and Firefox. Review localStorage using browsers debugging tools to see database structure after running tests.
 <div id="mocha"></div>
 <div id="messages"></div>
 <div id="fixtures"></div>
-<script>
+<div id="app"></div>
+<script type="module">
 mocha.setup('bdd');
-var expect = chai.expect;
 </script>
 
-<script src="./index.js"></script>
+<script type="module" src="./index.js"></script>
 
-<script>
-mocha.run();
+<script type="module">
+    mocha.checkLeaks();    
+    mocha.run();
+	//benchtest(mocha.run(),{log:"md",off:true});
 </script>
+
 </body>
 </html>

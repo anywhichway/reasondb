@@ -1,0 +1,2 @@
+{"type":"json","key":"/Object/readwrite"}
+"{\"path\":\"/Object/readwrite\",\"edges\":{\"\\\"readwrite\\\"\":true},\"acls\":{\"r\":{\"a\":{\"user1\":true},\"d\":{\"user2\":true}},\"w\":{\"a\":{\"user1\":true,\"user2\":true},\"d\":{}}}}"
