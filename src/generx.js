@@ -1,3 +1,33 @@
+const computeStats = (spec={},value) => {
+		Object.keys(spec).forEach(key => {
+			if(typeof(spec[key])==="function") {
+				spec[key].call(spec[key],value);
+			} else if(value && typeof(value)==="object" && value[key]!==undefined) {
+				computeStats(spec[key],value[key]);
+			}
+		})
+	},
+	resetStats = (spec={}) => {
+		Object.keys(spec).forEach(key => {
+			if(typeof(spec[key])==="function") {
+				if(spec[key].reset) spec[key].reset.call(spec[key]);
+			} else {
+				resetStats(spec[key]);
+			}
+		})
+	},
+	forceableStats = (spec={}) => {
+		return Object.keys(spec).some(key => {
+			if(key==="$") {
+				return !spec[key].running;
+			} 
+			if(spec[key] && typeof(spec[key])==="object") {
+				return forceableStats(spec[key]);
+			}
+		})
+	};
+
+import {zscore} from "./zscore.js";
 
 	//Add every, forEach, map, reduce, some, etc. capability to generators
 export function generx(f) {
@@ -7,7 +37,7 @@ export function generx(f) {
 		if(async) {
 			proto.every = async function(f) {
 				let i = 0;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done && !(await f(item,i,this))) return 0;
 				}
@@ -18,7 +48,7 @@ export function generx(f) {
 			}
 			proto.find = async function(f) {
 				let i = 0;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done && await f(item,i,this)) return item;
 				}
@@ -28,7 +58,7 @@ export function generx(f) {
 			}
 			proto.findIndex = async function(f) {
 				let i = 0;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done && await f(item,i,this)) return i;
 				}
@@ -38,7 +68,7 @@ export function generx(f) {
 				}
 			}
 			proto.forEach = async function(f) {
-				for(let i=0;this.length>=0 && !this.done;i++) {
+				for(let i=0;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done) await f(item,i,this);
 				}
@@ -49,7 +79,7 @@ export function generx(f) {
 			}
 			proto.includes = async function(value) {
 				let i = 0;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done && item===value) return true;
 				}
@@ -60,7 +90,7 @@ export function generx(f) {
 			}
 			proto.indexOf = async function(value) {
 				let i = 0;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done && item===value) return i;
 				}
@@ -74,7 +104,7 @@ export function generx(f) {
 				const me = this;
 				let generator = async function*() {
 					let i = 0;
-					for(;i<me.length;i++) {
+					for(;me.resolved && i<me.length;i++) {
 						yield i;
 					}
 					for await(const item of me) {
@@ -82,13 +112,13 @@ export function generx(f) {
 						i++;
 					}
 				}
-				generator = enhanceGenerator(generator);
+				generator = generx(generator);
 				return generator();
 			}
 			proto.lastIndexOf = async function(value) {
 				let i = 0,
 					last = -1;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done && item===value) last = i;
 				}
@@ -101,7 +131,7 @@ export function generx(f) {
 			proto.map = async function(f) {
 				const result = [];
 				let i = 0;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done) result.push(await f(item,i,this));
 				}
@@ -110,10 +140,55 @@ export function generx(f) {
 				}
 				return result;
 			}
+			proto.random = async function(size) {
+				const all = [],
+					results = [],
+					sampled = {};
+				await this.forEach(item => all.push(item));
+				while(results.length<size && results.length<all.length) {
+					const index = Math.trunc(Math.random() * all.length);
+					if(!sampled[index]) {
+						sampled[index] = true;
+						results.push(all[index]);
+					}
+				}
+				return results;
+			}
+			/*
+			n = ((cv*stdev)/me)^2
+			The “s” is the standard deviation. 
+			The “E” is the desired margin of error. 
+			The cv is the critical value from the ztable for a 95% CI.
+		  */
+			proto.sample = async function({me=.05,ci=.999,key}) {
+				const all = [],
+					results = [],
+					sampled = {};
+				let sum = 0,
+					count = 0;
+				await this.forEach(item => { const value = key ? item[key] : item; all.push(value); sum += value; count++ });
+				const avg = sum / count,
+					variance = all.reduce((accum,value) => Math.abs(avg - value),0) / count,
+					stdev = Math.sqrt(variance),
+					cv = zscore(ci),
+					minsize = ((cv*stdev)/me)^2,
+					size = Math.max(minsize,1);
+				while(results.length<size && results.length<all.length) {
+					const index = Math.trunc(Math.random() * all.length);
+					if(!sampled[index]) {
+						sampled[index] = true;
+						results.push(all[index]);
+					}
+				}
+				if(minsize<results.length) {
+					Object.defineProperty(results,"valid",{value:true});
+				}
+				return results;
+			}
 			proto.reduce = async function(f,accum) {
 				let initialized = accum!==undefined,
 					i = 0;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done) {
 						if(initialized) {
@@ -138,7 +213,7 @@ export function generx(f) {
 				const me = this;
 				let generator = async function*() {
 					const items = [];
-					for(;me.length>=0 && !me.done;i++) {
+					for(;me.resolved && !me.done;i++) {
 						const item = await me[i];
 						if(!me.done) items.unshift(item);
 					}
@@ -147,14 +222,15 @@ export function generx(f) {
 					}
 					for(const item of items) yield item;
 				}
-				generator = enhanceGenerator(generator);
+				generator = generx(generator);
+				if(this.stats||this.seek) generator = generator.withMemory(this);
 				return generator();
 			}
 			proto.sort = function(f) {
 				const me = this;
 				let generator = async function*() {
 					const items = [];
-					for(;me.length>=0 && !me.done;i++) {
+					for(;me.resolved && !me.done;i++) {
 						const item = await me[i];
 						if(!me.done) items.push(item);
 					}
@@ -164,14 +240,15 @@ export function generx(f) {
 					items.sort(f);
 					for(const item of items) yield item;
 				}
-				generator = enhanceGenerator(generator);
+				generator = generx(generator);
+				if(this.stats||this.seek) generator = generator.withMemory(this);
 				return generator();
 			}
 			proto.slice = function(begin=0,end) {
 				const me = this;
 				let generator = async function*() {
 					let i = 0;
-					for(;me.length>=0 && !me.done;i++) {
+					for(;me.resolved && !me.done;i++) {
 						const item = await me[i];
 						if(i<begin) { i++; continue; }
 						if(i===end) return;
@@ -186,12 +263,13 @@ export function generx(f) {
 					}
 				}
 				generator = generx(generator);
+				if(this.stats||this.seek) generator = generator.withMemory(this);
 				return generator();
 			}
 			proto.some = async function(f) {
 				let i = 0,
 					length = this.length;
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done && await f(item,i,this)) return true;
 				}
@@ -201,7 +279,7 @@ export function generx(f) {
 			}
 			proto.values = async function() {
 				const values = [];
-				for(;this.length>=0 && !this.done;i++) {
+				for(;this.resolved && !this.done;i++) {
 					const item = await this[i];
 					if(!this.done) {
 						if(item && typeof(item)==="object" && item instanceof Edge) {
@@ -232,46 +310,44 @@ export function generx(f) {
 				}
 				return values;
 			}
-			proto.withMemory = function() {
-				Object.defineProperty(this,"length",{get:function() { return values.length}});
-				const values = [],
-					proxy = new Proxy(this,{
-						get(target,key) {
-							const value = target[key];
-							if(key==="next") {
-								return async function next() {
-										const result = await value.call(target.generator);
-										if(result.done) {
-											target.done = true;
-										} else {
-											values.push(result.value);
-										}
-										return result;
-								}
-							}
-							if(typeof(key)==="string" || typeof(key)==="number") {
-								const index = parseInt(key);
-								if(!isNaN(index)) {
-									if(index<values.length) return values[index];
-									let delta = (index - values.length) + 1,
-										value;
-									while(delta--) {
-										value = target.next().then(result => {
-											if(result.done) {
-												target.done = true;
-											} else {
-												values.push(result.value);
-											}
-											return result.value;
-										});
-									}
-									return value;
-								}
-							}
-							return value;
+			proto.withMemory = function({stats,seek}={}) {
+				const me = this;
+				if(stats) {
+					this.stats = stats;
+					this.force = forceableStats(stats);
+				}
+				if(seek) this.seek = seek;
+				Object.defineProperty(this,"resolved",{configurable:true,value: new Proxy([],{
+					async get(target,property) {
+						if(me.length===0) { // force full resolution
+							let next;
+							do {
+								 next = await me.next();
+							} while(next && !next.done);
 						}
-					});
-				return proxy;
+						return me[property];
+					}
+				})});
+				if(this.force) {
+					this.resolved[0]; // resolves entire generator
+				} else if(seek) {
+					return new Proxy(this,{
+						async get(target,property) {
+							const index = parseInt(property),
+								length = target.length;
+							if(!isNaN(index) && index>=length) {
+								let i = length - 1;
+								while(i++<index) {
+									const next = await target.next();
+									if(next && next.done) break;
+								}
+								return target[index];
+							}
+							return target[property];
+						}
+					})
+				}
+				return this;
 			}
 		} else {
 			proto.every = function(f) {
@@ -331,7 +407,7 @@ export function generx(f) {
 						i++;
 					}
 				}
-				generator = enhanceGenerator(generator);
+				generator = generx(generator);
 				return generator();
 			}
 			proto.lastIndexOf = function(value) {
@@ -352,6 +428,20 @@ export function generx(f) {
 					result.push( f(item,i++,this));
 				}
 				return result;
+			}
+			proto.random = function(size) {
+				const all = [],
+					results = [],
+					sampled = {};
+				this.forEach(item => all.push(item));
+				while(results.length<size && results.length<all.length) {
+					const index = Math.trunc(Math.random() * all.length);
+					if(!sampled[index]) {
+						sampled[index] = true;
+						results.push(all[index]);
+					}
+				}
+				return results;
 			}
 			proto.reduce = function(f,accum) {
 				let initialized = accum!==undefined,
@@ -378,7 +468,8 @@ export function generx(f) {
 					if(this.values) this.values.reverse();
 					for(const item of items) yield item;
 				}
-				generator = enhanceGenerator(generator);
+				generator = generx(generator);
+				if(this.stats||this.seek) generator = generator.withMemory(this);
 				return generator();
 			}
 			proto.sort = function(f) {
@@ -393,7 +484,8 @@ export function generx(f) {
 					items.sort(f);
 					for(const item of items) yield item;
 				}
-				generator = enhanceGenerator(generator);
+				generator = generx(generator);
+				if(this.stats||this.seek) generator = generator.withMemory(this);
 				return generator();
 			}
 			proto.slice = function(begin=0,end) {
@@ -408,7 +500,8 @@ export function generx(f) {
 						yield item;
 					}
 				}
-				generator = enhanceGenerator(generator);
+				generator = generx(generator);
+				if(this.stats||this.seek) generator = generator.withMemory(this);
 				return generator();
 			}
 			proto.some = function(f) {
@@ -435,57 +528,88 @@ export function generx(f) {
 				}
 				return values;
 			}
-			proto.withMemory = function() {
-				Object.defineProperty(this,"length",{get:function() { return values.length}});
-				const values = [],
-					proxy = new Proxy(this,{
-						get(target,key) {
-							const value = target[key];
-							if(key==="next") {
-								return function next() {
-										const result = value.call(target.generator);
-										if(result.done) {
-											this.done = true;
-										} else {
-											values.push(result.value);
-										}
-										return result;
-								}
-							}
-							if(typeof(key)==="string" || typeof(key)==="number") {
-								const index = parseInt(key);
-								if(!isNaN(index)) {
-									if(index<values.length) return values[index];
-									let delta = (index - values.length)  + 1,
-										result = {};
-									while(delta--) {
-										result = target.generator.next();
-										if(result.done) {
-											this.done = true;
-											return result.value;
-										} else {
-											values.push(result.value);
-										}
-									}
-									return result.value;
-								}
-							}
-							return value;
+			proto.withMemory = function({stats,seek}={}) {
+				const me = this;
+				if(stats) {
+					this.stats = stats;
+					this.force = forceableStats(stats);
+				}
+				if(seek) this.seek = seek;
+				Object.defineProperty(this,"resolved",{configurable:true,value: new Proxy([],{
+					get(target,property) {
+						if(me.length===0) { // force full resolution
+							let next;
+							do {
+								 next = me.next();
+							} while(next && !next.done);
 						}
-					});
-				return proxy;
+						return me[property];
+					}
+				})});
+				if(this.force) {
+					this.resolved[0]; // resolves entire generator
+				} else if(seek) {
+					return new Proxy(this,{
+						get(target,property) {
+							const index = parseInt(property),
+								length = target.length;
+							if(!isNaN(index) && index>=length) {
+								let i = length - 1;
+								while(i++<index) {
+									const next = target.next();
+									if(next && next.done) break;
+								}
+								return target[index];
+							}
+							return target[property];
+						}
+					})
+				}
+				return this;
 			}
 		}
 		const proxy = new Proxy(f,{
 			apply(target,thisArg,argumentsList) {
 	      const base = target.call(thisArg,...argumentsList),
 	       basenext = base.next;
-	      let generator = base;
+	      let generator = base,
+	      	length = 0;
 	      base.next = function next() {
-	       return generator===base
+	       const next = generator===base
 	         ? basenext.call(base) // generator is the original one
 	         : generator.next(); // generator is the reset one
+	         if(next instanceof Promise) {
+	        	 const l = length;
+	        	 if(base.resolved) base[l] = next;
+	        	 next.then(next => {
+	        		 if(!next.done) {
+	        			 if(base.resolved) {
+		        				if(base.stats) computeStats(base.stats,next.value);
+		        				base[l] = next.value;
+		        			}
+	        			 length++;
+	        		 }
+	        		 base.done = next.done;
+	        		 return next.value;
+	        	 })
+	        	 next.catch((e) => {
+	        		 base.done = true;
+	        		 console.log(e);
+	        		 throw e;
+	        	 })
+	         } else {
+	        	 if(!next.done) {
+	        		 if(base.resolved) {
+		        			if(this.stats) computeStats(this.stats,next.value);
+	        			 	base[length] = next.value;
+		        		 }
+	        		 length++;
+	        	 }
+	        	 base.done = next.done;
+	        }
+	        return next;
 	      }
+	    	Object.defineProperty(base,"length",{get:function() { return length}});
 	      // define reset to use the original arguments to create
 	      // a new generator and assign it to the generator variable
 	      Object.defineProperty(generator,"reset",{
@@ -495,6 +619,12 @@ export function generx(f) {
 	          	generator =  target.call(thisArg,...argumentsList);
 	          	Object.defineProperty(target,"generator",{enumerable:false,configurable:true,value:generator});
 	          	delete base.done;
+	          	if(base.stats) resetStats(base.stats)
+	          	while(length) {
+	          		delete this[length-1];
+	          		length--;
+	          	}
+	          	// need to reset stats
 	          }
 	      });
 	      // return the generator, which now has a reset method

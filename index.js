@@ -36,4 +36,8 @@ const ReasonDB = {
 		Edge
 };
 
+if(typeof(window)!=="undefined") {
+	window.ReasonDB = ReasonDB;
+}
+
 export {ReasonDB};

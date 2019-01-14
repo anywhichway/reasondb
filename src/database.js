@@ -42,7 +42,9 @@ import {Insert} from "./sql-like/insert.js";
 
 import {Select} from "./sql-like/select.js";
 
+import {Update} from "./sql-like/update.js";
 
+import {STOPWORDS} from "./stopwords.js";
 
 function indexableDate(date,full,object) {
 	if(full==="full") {
@@ -61,40 +63,6 @@ function indexableDate(date,full,object) {
 	return {
 		time: date.getTime()
 	}
-}
-
-function ensureStorageInterface(storage,options={}) {
-	if(!storage) throw new Error("Storage option not provided");
-	const propertyMap = {}; // used by WebWorker Proxy
-	loop:
-	for(const key of ["get","set","remove"]) {
-		if(typeof(storage[`${key}Item`])==="function") {
-			if(options.promisify) promisify(storage[`${key}Item`],storage);
-			continue;
-		}
-		if(typeof(storage[key])==="function") {
-			if(options.promisify) promisify(storage[key],storage);
-			storage[`${key}Item`] = async function(...args) {
-				return await storage[key].call(this,...args)
-			}
-			propertyMap[`${key}Item`] = key;
-			continue;
-		} else if(key==="remove") {
-			for(const altkey of ["del","delete"]) {
-				if(typeof(storage[altkey])==="function") {
-					if(options.promisify) promisify(storage[altkey],storage);
-					storage[`${key}Item`] = async function(...args) { return storage[altkey].call(this,...args); }
-					propertyMap[`${key}Item`] = altkey;
-					break loop;
-				}
-			}
-		}
-		throw new Error(`Missing ${key} or ${key}Item`);
-	}
-	if(options.workerArgumentsList && typeof(window.Worker)!=="undefined" && storage!==MEMORYSTORAGE && storage!==localStorage) {
-		return new WorkerProxy("../worker-proxy.js",storage,{argumentList:options.workerArgumentList,instanceVariable:options.workerInstanceVariable,cname:options.workerName,propertyMap})
-	}
-	return storage;
 }
 
 function flatten(object) {
@@ -132,9 +100,7 @@ export class Database {
 		enhanceGenerators(this,["get","match","matchObjects","matchPath"],{all:[Edge.prototype.value,Edge.prototype.on,Edge.prototype.secure,Edge.prototype.patch,Edge.prototype.put]});
 		this.options = options = Object.assign({},options);
 		if(!options.authenticate) options.authenticate = () => true;
-		let storage = options.storage;
-		if(!storage) storage = options.storage = MEMORYSTORAGE;
-		storage = options.storage = ensureStorageInterface(storage,this.options);
+		if(!options.storage) options.storage = MEMORYSTORAGE;
 		this.schema = Object.assign({},SCHEMA,options.schema);
 		this.predicates = Object.assign({},predicates,options.predicates);
 		this.cache = new LFRUStorage();
@@ -142,15 +108,16 @@ export class Database {
 			return new Edge(this,config,force);
 		}
 		if(options.onready) this.onready = options.onready;
+		this.remote = options.remote||[];
 		this.initialized = new Promise(async resolve => {
-			const storage = this.options.storage;
+			const storage = options.storage;
 			if(options.clear) await this.clear();
 			if(options.authenticate) await options.authenticate.call(this);
 			const root = await storage.getItem("/");
 			if(!root) await storage.setItem("/",JSON.stringify(this.Edge()));
 			await this.secure();
 			this.expire();
-			if(options.listen) this.listen(options.listen);
+			if(options.listen) this.listen(options.listen,options);
 			resolve();
 			if(this.onready) this.onready.call(this);
 		});
@@ -163,41 +130,61 @@ export class Database {
 			csoul = current._,
 			ctime = csoul.modifiedAt.getTime(),
 			ccreated = csoul.createdAt.getTime(),
-			now = Date.now(),
-			future = utime - now,
-			version = Math.max(usoul.version,csoul.version);
-		if(deepEqual(updated,current) && utime===ctime && usoul.version===csoul.version && usoul.createdAt===csoul.createdAt) { // same
-			return; // throw away by returning undefined
+			now = Date.now();
+	// if the time on the updated objects is the same as the time on the current version
+	// and the version of the update is the same as the current version
+	// and the update was originally created the same time as the current version
+	// and the updated object is identical to the current version of the object
+	// then just return, no update is necessary
+	if(utime===ctime && usoul.version===csoul.version
+			&& usoul.createdAt===csoul.createdAt && deepEqual(updated,current)) {
+		return;
+	}
+	// if the time of the update is in the future
+	// then schedule it for the future to avoid real time skew or time spoofing
+	if(utime - now > 0) {
+		setTimeout(() => this.putItem(updated),utime - now);
+		return; 
+	}
+	// if the time on the updated object is before the time on the current version
+	// then just return, no update necessary because current version is more recent
+	if(utime<ctime) {
+		return;
+	}
+	// if the time on the updated object is after the time on the current version
+	// then update the version of the updated soul to the maximum version and use it
+	if(utime>ctime) {
+		usoul.version = Math.max(usoul.version,csoul.version);
+		return updated;
+	}
+	// if version and update time are the same (very rare)
+	if(usoul.version===csoul.version && utime===ctime) {
+		// if update is more recently created
+		// return the object to be used as the update
+		if(ucreated>ccreated) { 
+			return updated;
 		}
-		if(future>0) { // update is in the future
-			setTimeout(() => this.putItem(updated),future); // so do it in the future
-			return; 
+		// if current is more recently created
+		// then just return, no update necessary 
+		if(ccreated>ucreated) { 
+			return; // throw away
 		}
-		if(utime<ctime) { // current version newer
-			return; // throw away by returning undefined
+		// if key is lexically greater (arbitrary but consistent approach)
+		// then update the version of the updated soul to the maximum version and use it
+		if(usoul["#"]>=csoul["#"]) { 
+			usoul.version = Math.max(usoul.version,csoul.version); 
+			return updated; // use the update (abitrary but consistent approach)
 		}
-		if(utime>ctime) { // update is newer
-			usoul.version = version; // update to max version
-			return updated; // go ahead with merge
-		}
-		if(usoul.version===csoul.version && utime===ctime) { // version and update time are the same (very rare)
-			if(ucreated>ccreated) { // if update is more recently created
-				return updated; // use it
-			}
-			if(ccreated>ucreated) { // if current is more recently created
-				return; // throw away
-			}
-			if(usoul["#"]>=csoul["#"]) { // else if key is lexically greater
-				usoul.version = version; // update more recent to max version
-				return updated; // use the update (abitrary but consistent approach)
-			}
-			return; // otherwise throw away
-		}
+	}
+	// otherwise something very odd has happened
+	// e.g. different version numbers but same update or create times
+	// ignore the update
+
 	}
 	async bless(json,atomic=json._?json._.atomic:undefined,metadata=json["_"],expireAt) {
 		if(!metadata || metadata["#"]!==json["#"]) {
 			if(!metadata) metadata = {};
-			json._ || Object.defineProperty(json,"_",{enumerable:false,configurable:false,writable:true,value:metadata}); // writable:false
+			json._ || Object.defineProperty(json,"_",{enumerable:false,configurable:true,writable:false,value:metadata}); // writable:false
 			//if(!metadata["#"]) metadata["#"] = json.constructor.name+"@"+(json instanceof Date ? json.getTime() : genId());
 			if(!metadata["#"]) metadata["#"] = Referencer.generateId(json);
 			if(atomic) metadata.atomic = true;
@@ -219,9 +206,8 @@ export class Database {
 		return json;
 	}
 	async clear() {
-		const storage = this.options.storage,
-			clear = storage.clear || storage.flush || storage.flushdb || storage.destroy || (() => true);
-		await clear.call(storage);
+		const storage = this.options.storage;
+		await storage.clear();
 		await storage.setItem("/",JSON.stringify(this.Edge()));
 	}
 	compile(value,{indexDates,inline}={}) {
@@ -258,9 +244,9 @@ export class Database {
 				let tokens;
 				if(typeof(arg)==="string" && arg!=="$true!") {
 					tokens = {};
-					tokens.words = tokenize(arg);
+					tokens.words = tokenize(arg).filter(token => !STOPWORDS.includes(token));
 					tokens.stems = tokens.words.map(token => stemmer(token)),
-					tokens.trigrams = trigrams(tokens.stems);
+					tokens.trigrams = trigrams(tokens.stems).filter(gram => !STOPWORDS.includes(gram));
 				}
 				if(pname && test) {
 					if(keys.length>1) throw new Error(`Property values can contain only one predicate test: ${JSON.stringify(keys)}`);
@@ -320,21 +306,40 @@ export class Database {
 	get GeoPoint() {
 		return GeoPoint;
 	}
-	async getItem(key) {
+	async getItem(key,{local}={}) {
+		this.remote.forEach(remote => {
+			if(remote.source) {
+				remote.server.getItem(key).then(value => {
+					if(value!==undefined) {
+						this.setItem(key,value,{local:true});
+					}
+				})
+			}
+		})
 		const data = await this.options.storage.getItem(key);
 		if(data!=null) {
 			return await this.restore(JSON.parse(data));
 		}
 	}
-	async getObject(id,{partial,read,nocache}={}) {
+	async getObject(id,{partial,read,nocache,local}={}) {
 		if(!id) return;
-		//const parts = id.split("@"); // should use dereference and singleton check
-		//if(parts.length===2 && parts[0]==="Date") {
-		//	return new Date(parseInt(parts[1]));
-		//}
 		let object = Referencer.dereference(id);
 		if(Referencer.isValueKeyed(object)) {
 			return object;
+		}
+		let remoted;
+		if(!local) {
+			this.remote.forEach(remote => {
+				if(remote.source) {
+					remoted || new Promise(resolve => remoted = resolve);
+					remote.server.getObject(id).then(async object => {
+						if(object!=null) {
+							this.putItem(await this.bless(object),{local:true,nocache});
+							remoted(object);
+						}
+					})
+				}
+			})
 		}
 		if(!read) {
 			object = this.cache.getItem(id);
@@ -342,39 +347,15 @@ export class Database {
 				return await this.restore(object,{partial,read});
 			}
 		}
-		const data = await this.options.storage.getItem(id);
-		if(data) {
+		let data = await this.options.storage.getItem(id);
+		if(!data) {
+			if(remoted) return await remoted;
+		} else {
 			object = await this.restore(typeof(data)==="string" ? JSON.parse(data) : data,{partial,read});
-			this.getObjectRemote(id,data._);
 			return nocache ? object : this.cache.setItem(id,object);
 		}
-		this.getObjectRemote(id);
 	}
-	async getObjectRemote(id,metadata) {
-		this.getObjectRemote.memo || (this.getObjectRemote.memo={});
-		if(!this.getObjectRemote.memo[id]) {
-			this.getObjectRemote.memo[id] = true;
-			for(const peername in this.options.peers) {
-				//console.log(`Requesting ${peername}/${id}...`)
-				//If-Modified-Since: Wed, 21 Oct 2015 07:28:00 GMT
-				fetch(`${peername}/${id}`)
-					.then(async res => {
-						if(res.ok) {
-							console.log(await res.json());
-							// update local database,
-							// should have a way to verify version on server and not send if not needed by using headers
-						} else {
-							console.log(await res.text());
-						}
-					})
-					.catch(e => console.log(e))
-					.finally(() => {
-						this.getObjectRemote.memo[id] = null;
-					});
-			}
-		}
-	}
-	getPaths(value,{indexDates}={},path,allpaths=[],parent={},schema,key) { // gets paths for both regular objects and match patterns
+	getPaths(value,{ctor=value.constructor,indexDates}={},path,allpaths=[],parent={},schema,key) { // gets paths for both regular objects and match patterns
 		const options = this.options,
 			type = typeof(value);
 		if(type==="string") {
@@ -386,9 +367,9 @@ export class Database {
 				path.push(`"${value}"`);
 				allpaths.push(path);
 				if((!schema || (options.explicitSearchable && schema.searchable[key]) || (!options.explicitSearchable && schema.searchable[key]!==false)) && value.indexOf(" ")>=0) {
-					const tokens = tokenize(value),
+					const tokens = tokenize(value).filter(token => !STOPWORDS.includes(token)),
 						stems = tokens.map(token => stemmer(token)),
-						tris = trigrams(stems);
+						tris = trigrams(stems).filter(gram => !STOPWORDS.includes(gram));
 					currentpath.push("$fulltext");
 					stems.forEach(stem => {
 						const nextpath = currentpath.slice();
@@ -406,7 +387,7 @@ export class Database {
 			}
 		} else if(value && type==="object") {
 				schema = this.getSchema(value);
-				path || (path=[value.constructor.name]);
+				path || (path=[typeof(ctor)==="string" ? ctor : ctor.name]);
 				if(value["#"] && allpaths.length>0) {
 					const nextpath = path.slice();
 					nextpath.push(value["#"]);
@@ -418,14 +399,16 @@ export class Database {
 						const nextpath = path.slice(),
 							part = this.compile(value[key],{indexDates,inline:this.options.inline}), // handle predicates, e.g. ${eq: 2}
 							type = typeof(part);
-						if(value[key] instanceof Date && part && type==="object" && !(part instanceof Date)) {
-							part[`Date@${value[key].getTime()}`] = value["#"];
-						}
-						if(key==="$self") {
-							nextpath.push(part);
-						} else {
-							nextpath.push(this.compile(key,{indexDates,inline:this.options.inline})); // handle functions as keys, e.g. {[key => /someregexp/]: <somevalue>}
-							this.getPaths(part,{indexDates},nextpath,allpaths,value,schema,key);
+						if(type!=="undefined") {
+							if(value[key] instanceof Date && part && type==="object" && !(part instanceof Date)) {
+								part[`Date@${value[key].getTime()}`] = value["#"];
+							}
+							if(key==="$self") {
+								nextpath.push(part);
+							} else {
+								nextpath.push(this.compile(key,{indexDates,inline:this.options.inline})); // handle functions as keys, e.g. {[key => /someregexp/]: <somevalue>}
+								this.getPaths(part,{indexDates},nextpath,allpaths,value,schema,key);
+							}
 						}
 					}
 				}
@@ -445,9 +428,9 @@ export class Database {
 				return Object.assign({index:{},searchable:{},integrity:{},management:{},security:{},validation:{}},schema);
 			}
 	}
-	async graph(object,{indexDates,leaf}={}) {
+	async graph(object,{ctor,indexDates,leaf}={}) {
 		const root = this.Edge();
-		for(let path of this.getPaths(object,{indexDates})) {
+		for(let path of this.getPaths(object,{ctor,indexDates})) {
 			if(leaf) path.push(leaf);
 			const fullpath = path.slice();
 			const key = path.shift();
@@ -475,23 +458,49 @@ export class Database {
 			}
 		})());
 	}
-	async* match(pathOrObject,{partial,read}={}) {
-		const type = typeof(pathOrObject);
+	async* match(pathOrObject,{ctor,partial,read,local}={}) {
+		//console.log("match",pathOrObject,{ctor,partial});
+		const type = typeof(pathOrObject),
+			found = {};
+		//console.log(type);
 		if(type==="string") {
 			for await(const id of this.matchPath(pathOrObject,{partial,read})) {
 				const object = await this.getObject(id,{partial:partial ? pathOrObject : null,read});
-				if(object) yield object;
+				if(object) {
+					found[id] = true;
+					yield object;
+				}
 			}
 		} else if(pathOrObject && type==="object") {
-			for await(const id of this.matchObjects(pathOrObject)) {
+			//console.log(pathOrObject)
+			for await(const id of this.matchObjects(pathOrObject,ctor)) {
+				//console.log(id)
 				const object = await this.getObject(id,{partial:partial ? pathOrObject : null,read});
-				if(object) yield object;
+				if(object) {
+					found[id] = true;
+					yield object;
+				}
+			}
+		}
+		if(!local) {
+			const cursorid = Math.random();
+			for(const remote of this.remote) {
+				if(remote.source) {
+					let object;
+					do {
+						object = await remote.server.match(cursorid,pathOrObject,{ctor,partial});
+						if(object) {
+							this.putItem(await this.bless(object),{local:true});
+							if(!found[object["#"]]) yield object;
+						}
+					} while(object);
+				}
 			}
 		}
 	}
-	async* matchObjects(object) {
+	async* matchObjects(object,ctor) {
 		let ids;
-		for(let path of this.getPaths(object)) {
+		for(let path of this.getPaths(object,{ctor})) {
 			let pathids;
 			await this.get(path).forEach(edge => {
 				if(!pathids) pathids = {};
@@ -522,16 +531,16 @@ export class Database {
 		if(!pathids) return;
 		for(const id in pathids) yield id;
 	}
-	async putItem(object,{force,indexDates,reactive,expireAt,atomic=object._?object._.atomic:undefined,source}=this.options) {
+	async putItem(object,{force,indexDates,reactive,expireAt,atomic=object._?object._.atomic:undefined,source,local}=this.options) {
 		const id = object["#"];
 		if(id) {
-			const existing = await this.getObject(id,{read:true,nocache:true});
+			const existing = await this.getObject(id,{read:true,nocache:true,local:true});
 			if(existing) {
 				object = this.arbitrate(object,existing);
 				if(!object) return;
 				const oldvalues = mergeObjects(existing,object);
 				if(oldvalues) {
-					this.bless(oldvalues,true,existing._); // make it look like a full object
+					await this.bless(oldvalues,true,existing._); // make it look like a full object
 					for(const key in object._) existing._[key] = object._[key];
 					object = existing;
 					await this.ungraph(oldvalues,{leaf:id});
@@ -539,7 +548,19 @@ export class Database {
 				if(!force) this.version(object,{expireAt,atomic});
 			}
 		}
-		await this.saveObject(object,{indexDates,expireAt,atomic,source});
+		await this.saveObject(object,{indexDates,expireAt,atomic,source,local});
+		const target = Object.assign({},object);
+		target._ = object._; // expose metadata
+		for(const key of ["createdAt","expireAt","modifiedAt"]) {
+			if(target._[key]) target._[key] = this.compile(target._[key]);
+		}
+		if(!local) {
+			this.remote.forEach(remote => {
+				if(remote.sink) {
+					remote.server.putItem(target); // eliminates undefined values
+				}
+			})
+		}
 		await this.graph(object,{indexDates,leaf:object["#"]}); // save adds id if missing
 		if(reactive) return this.reactor(object);
 		return object;
@@ -570,7 +591,14 @@ export class Database {
 			}
 		});
 	}
-	async removeItem(objectOrKey) {
+	async removeItem(objectOrKey,{local}={}) {
+		if(!local) {
+			this.remote.forEach(remote => {
+				if(remote.sink) {
+					remote.server.removeItem(objectOrKey)
+				}
+			})
+		}
 		if(typeof(objectOrKey)==="string") {
 			if(isSoul(objectOrKey)) {
 				objectOrKey = await this.getObject(objectOrKey);
@@ -593,11 +621,6 @@ export class Database {
 				return this.getObject(data,{partial});
 			}
 			return Referencer.dereference(data);
-			//if(data==="@Infinity") return Infinity;
-			//if(data==="@-Infinity") return -Infinity;
-			//if(data==="@NaN") return NaN;
-			//if(data.indexOf("Date@")===0) return new Date(parseInt(data.substring("Date@".length)))
-			//return data;
 		} 
 		if(data && typeof(data)==="object" && data["#"]) {
 			const [cname,id] = data["#"].split("@"),
@@ -629,29 +652,8 @@ export class Database {
 		return data;
 	}
 	async saveObject(object,options={}) {
-		const {expireAt,atomic,source}=options,
-			serializable = await this.serializable(object,{expireAt,atomic,save:true,explode:true});
-		this.saveObjectRemote(serializable,{source});
-	}
-	async saveObjectRemote(object,{source}) {
-		const id = object["#"];
-		for(const peername in this.options.peers) {
-			//console.log(`Saving ${peername}/${id} ...`);
-			if(peername.indexOf(source)===0) continue;
-			const body = JSON.stringify(object);
-			fetch(`${peername}/${id}`,{method:"PUT",body,headers:{"Accept":"application/json;charset=utf-8","Content-Length":body.length}})
-				.then(async res => {
-					if(res.ok) {
-						const txt = await res.text();
-						if(txt!==body) {
-							console.log("New data",body,txt);
-						}
-					} else {
-						console.log(await res.text());
-					}
-				})
-				.catch(e => console.log(e));
-		}
+		const {expireAt,atomic,source}=options;
+		await this.serializable(object,{expireAt,atomic,save:true,explode:true});
 	}
 	async secure(path,{read,write,expires,authorized=[]}={}) {
 		if(arguments.length<2) {
@@ -673,7 +675,7 @@ export class Database {
 	async serializable(object,{expireAt,atomic=object && object._?object._.atomic:undefined,save,explode}=this.options,recursing) {
 		if(!object) return;
 		const target = {},
-			original = await this.getObject(object["#"],{read:true,nocache:true}),
+			original = object["#"] ? await this.getObject(object["#"],{read:true,nocache:true,local:true}) : {},
 			same = deepEqual(object,original),
 			cname = object.constructor.name;
 			if(!this.schema[cname]) {
@@ -685,7 +687,7 @@ export class Database {
 				let value = object[key],
 					type = typeof(value);
 				for await(const node of this.get(`${cname}/${key}`)) { // will only loop once since no wild cards
-					const original = await this.getObject(object["#"]);
+					const original = await this.getObject(object["#"],{local:true});
 					value = await node.aclWrite(value,original ? original[key] : undefined);
 					//value = await node.callback(node.onget,value);
 					type = typeof(value);
@@ -694,18 +696,13 @@ export class Database {
 					if(Referencer.isValueKeyed(value,"#")) {
 						target[key] = Referencer.generateId(value);
 					} else if(!value._ || !value._.atomic){
-						target[key] = (await this.serializable(value,{expireAt,atomic:value._?value._.atomic:atomic,save,explode},true)) || value;
+						target[key] = (await this.serializable(value,{expireAt,atomic:value._?value._.atomic:atomic,save,explode,local:true},true)) || value;
 					}
 				} else {
 					target[key] = Referencer.generateId(value);
 				}
-				//else if(value===Infinity) target[key] = "@Infinity";
-				//else if(value===-Infinity) target[key] = "@-Inifinity";
-				//else if(typeof(value)==="number" && isNaN(value)) target[key] = "@NaN";
-				//else if(value!==undefined) target[key] = value;
 			}
 			if(object._) {
-				//if(save && !same) this.version(object,{expireAt,atomic});
 				if(atomic && object._atomic===undefined) object._.atomic = true;
 				target["#"] = object["#"];
 				target._ = Object.assign({},object._);
@@ -715,16 +712,30 @@ export class Database {
 				if(save && !same && target["#"]) {
 					await this.options.storage.setItem(target["#"],JSON.stringify(target));
 					this.cache.setItem(object["#"],object);
-					await this.graph(object._,{indexDates:true,leaf:object["#"]}); //"full"
+					await this.graph(object._,{ctor:object.constructor,indexDates:true,leaf:object["#"]}); //"full"
 				}
 			}
 			return !recursing || atomic || explode ? target : target["#"];
 	}
-	async setItem(key,value) {
-		const serializable = await this.serializable(value,{explode:true}),
+	async setItem(key,value,{local}={}) {
+		const type = typeof(value),
+			serializable = await this.serializable(value,{explode:true,local}),
 			result = await this.options.storage.setItem(key,JSON.stringify(serializable));
-		if(this.options.indexAllObjects && value && typeof(value)==="object") await this.putItem(value);
+		if(value && type==="object" && this.options.indexAllObjects) {
+			await this.putItem(value,{local});
+		} else if(!local) {
+			const target = value && type==="object" ? Object.assign({},value) : value;
+			if(value && type==="object" && value._) target._ = value._; // expose metadata
+			this.remote.forEach(remote => {
+				if(remote.sink) {
+					remote.server.setItem(key,target);
+				}
+			})
+		}
 		return result;
+	}
+	update(ctorOrClassName) {
+		return new Update(this,ctorOrClassName);
 	}
 	async ungraph(object,{indexDates,leaf}={}) {
 		const root = this.Edge();
@@ -745,244 +756,48 @@ export class Database {
 		if(expireAt) metadata.expireAt = expireAt;
 		metadata.modifiedAt = new Date(); 
 		metadata.version++;
-		//if(!atomic && !metadata.atomic) Object.keys(object).forEach(key => key==="_" || !object[key] || typeof(object[key])!=="object" || this.version(object[key]))
 	}
 }
 
+Database.prototype.listen = () => { ; };
 if(typeof(module)!=="undefined") {
-	const http = require("http"),
-		NanoPipe = require("nano-pipe");
-	
-	class Server {
-		constructor(options={}) {
-		  async function use({match,handle}) {
-		    // `match` and `handle` define a capability
-		    // if `match` is true or the result of match
-		    // and the inputs represented by `this` is true
-		    if((match===true || match.call(this,this)) && handle) {
-		      // then apply `handle` to the inputs
-		      return handle.call(this,this);
-		    }
-		    // else just return the inputs
-		    return this;
-		  }
-		  NanoPipe.pipeable(use);
-		  this.handler = NanoPipe();
-		  this.options = Object.assign({},options);
-		}
-		use(capability) {
-		  // just tell the NanoPipe to use the provided capability
-		  // as part of its pipe transformation process
-		  // capability has the surface {match, handle}
-		  this.handler = this.handler.use(capability);
-		  return this; // return `this` to support chaining
-		}
-		run(port=8080) {
-		  // create the server
-		  this.httpServer = http.createServer((req,res) => {
-		  	if(this.options.requestChangeLog) {
-		  		const stream = this.options.requestChangeLog;
-		  		req = new Proxy(req,{
-		  			set(target,property,value) {
-		  				let oldvalue = target[property];
-		  				if(oldvalue===value) return true;
-		  				target[property] = value;
-		  				try { oldvalue = JSON.stringify(oldvalue); } catch(e) { olvalue  = "[object Circular Object]"; }
-		  				try { value = JSON.stringify(value); } catch(e) { value  = "[object Circular Object]"; }
-		  				if(property[0]!=="_") stream.log(`request.${property}=${value} was ${oldvalue}`);
-		  				return true;
-		  			}
-		  		});
-		  	}
-		  	// handler is created in the constructor
-		    // it will be the NanoPipe that provides the server functionality
-		    // simply pipe all req, res pairs through the handler
-		    this.handler.pipe([{req,res}]);
-		  });
-	    // start listening on the provided port
-	    this.httpServer.listen(port, (err) => {
-	      if (err) {
-	        return console.log('something bad happened', err)
-	      }
-	      console.log(`server is listening on ${port}`);
-		  })
-		  return this; // returning 'this' will make the call chainable
-		}
-	}
-	function route(matcher,handlers) {
-		const match = function({req,res}) {
-			if(req && !res.headersSent) {
-				const type = typeof(matcher);
-				if(type==="function") {
-					if(matcher(req)) {
-						if(route.trace || matcher.trace) console.log(`Route ${matcher.name} true ${req.url}`);
-						return true;
-					}
-					if(route.trace) console.log(`Route ${matcher.name} false ${req.url}`)
-				} else if(type==="object" && matcher && matcher instanceof RegExp) {
-					if(matcher.test(req.url)) {
-						if(route.trace) console.log(`Route ${matcher}.test("${req.url}") true ${req.url}`)
-						return true;
-					}
-					if(route.trace) console.log(`Route ${matcher}.test("${req.url}") false ${req.url}`)
-				} else if(type==="string") {
-					if(req.url===matcher) {
-						if(route.trace) console.log(`Route ${matcher}===${req.url} true ${req.url}`);
-						return true;
-					}
-					if(route.trace) console.log(`Route ${matcher}===${req.url} false ${req.url}`);
-				}
-			}
-		},
-		handle = async function({req,res}) {
-			const method = req.method.toLowerCase(),
-				responder = handlers[method] || handlers.default,
-				key = handlers[method] ? method : "default";
-			if(responder) {
-				if(route.trace || handle.trace.includes(key)) console.log(`Handler ${key} ${req.url}`);
-				await responder.call(this,this);
-			}
-			return this;
-		};
-		handle.trace = ["get"];
-		return {match,handle};
-	}
-	route.trace = 0;
-	Database.prototype.listen = function(port) {
-		const server = new Server({requestChangeLog:console}),
-			db = this;
-		server
-				.use(route(function parseRemoteAddress() { return true; },
-					{default: ({req}) =>
-						{
-							req.remoteAddress = (req.headers['x-forwarded-for'] || '').split(',').pop() || 
-							req.connection.remoteAddress || 
-							req.socket.remoteAddress || 
-							req.connection.socket.remoteAddress
-						}
-					}))
-				
-				.use(route(function parseReferrer() { return true; },
-				{default: ({req}) =>
-					{
-						req.referrer = req.headers.referer || req.headers['Referer'] || req.headers['Referrer'];  
-					}
-				}))
-					
-				.use(route(function setAccessControl() { return true; },
-					{default: ({req,res}) => 
-						{ // Access-Control-Allow-Origin, should look at peer list
-							res.setHeader("Access-Control-Allow-Origin","*");
-						}
-					}))
-					
-				.use(route(function parseKey(req) { return req.url.indexOf("/data/")===0; },
-					{default: ({req}) => 
-						{
-							const parts = req.url.split("/");
-							req.key = parts.slice(2).join("/");
-						}
-					}))
-					
-				.use(route(function parseBody() { return true; },
-					{put: async ({req,res}) => 
-						{
-							return new Promise(resolve => {
-								let jsonString = '';
-
-				        req.on('data', function (data) {
-				            jsonString += data;
-				            if(jsonString.length > 1e6) {
-				            	jsonString = "";
-			                res.writeHead(413, {'Content-Type': 'text/plain'}).end();
-			                req.connection.destroy();
-			                resolve();
-				            }
-				        });
-
-				        req.on('end', function () {
-										req.body = {
-											json: async () => JSON.parse(jsonString),
-											text: async () => jsonString
-										}
-										resolve(true);
-				        });	
-							});
-						}
-					}))
-							
-				.use(route(function getData(req) {
-						return req.key!=null;
-					},
-					{
-						options: ({req,res}) => 
-						{
-							const headers = {};
-				      headers["Access-Control-Allow-Origin"] = "*"; // should add the peers
-				      headers["Access-Control-Allow-Methods"] = "GET, PUT, DELETE, OPTIONS"; //POST, 
-				      headers["Access-Control-Allow-Credentials"] = true;
-				      headers["Access-Control-Max-Age"] = '86400'; // 24 hours
-				      headers["Access-Control-Allow-Headers"] = "Content-Length, Content-Type, Accept, If-Modified-Since";
-				      res.writeHead(200, headers);
-				      res.end();
-						},
-						get: async function get({req,res})
-						{ 
-							if(isSoul(req.key)) {
-								let object = await db.getObject(req.key);
-								if(object) {
-									object = await db.serializable(object,{explode:true});
-									const data = JSON.stringify(object);
-									res.setHeader("Content-Type","application/json;charset=utf-8");
-									res.setHeader("Content-Length",data.length);
-									res.end(data);
-								}
-								return;
-							}
-							const edge = await db.options.storage.get("/"+req.key);
-							if(edge) {
-								const data = JSON.stringify(edge);
-								res.setHeader("Content-Type","application/json;charset=utf-8");
-								res.setHeader("Content-Length",data.length);
-								res.end(data);
-							};
-						},
-						put: async function put({req,res})  
-						{
-							const json = await req.body.json(),
-								id = json["#"],
-								objects = flatten(json);
-							for(const object of objects) {
-								if(object) {
-									// deserialize dates
-									["createdAt","expireAt","modifiedAt"].forEach(key => {
-										if(object._[key]) { // e.g. Date@1539853416193
-											const seconds = parseInt(object._[key].substring("Date@".length));
-											object._[key] = new Date(seconds);
-										}
-									});
-									await db.putItem(object,{source:req.headers.referrer || req.headers.referer});
-								}
-							}
-							const object = await db.getObject(id),
-								serializable = await db.serializable(object,{explode:true}),
-								txt = JSON.stringify(serializable);
-							res.setHeader("Content-Type","application/json;charset=utf-8");
-							res.setHeader("Content-Length",txt.length);
-							res.end(txt);
-						}
-					}))
-										
-				.use(route((req)=>!req.headersSent,
-					{get: ({req,res}) => 
-						{
-							res.statusCode = 404;
-							res.end();
-						}
-					}))
-				
-				
-		server.run(port);
-		console.log(`${this.options.name||"AnyWhichWay Database"} started on ${port}`);
+	Database.prototype.listen = function(port,options) {
+		const me = this,
+			FOS = require("fos"),
+	  	fos = new FOS(
+	  			{
+	  				getItem: async (key,options) => {
+	  					const value = await me.getItem(key,options),
+	  						type = typeof(value),
+	  						target = value && type==="object" ? Object.assign({},value) : value;
+	  						if(value && type==="object" && value._) target._ = value._; // expose metadata
+	  						return target;
+	  				},
+	  				getObject: async (id,options) => {
+	  					const value = await me.getObject(id,options),
+	  						target = value ? Object.assign({},value) : null;
+	  					if(value && value._) target._ = value._; // expose metadata
+	  					return target;
+	  				},
+	  				removeItem: me.removeItem.bind(me),
+	  				putItem: me.putItem.bind(me),
+	  				setItem: me.setItem.bind(me),
+	  				match: async (generatorId,...args) => {
+	  					//console.log(generatorId,...args)
+	  					let generator = fos.generators[generatorId];
+	  					if(!generator) generator = fos.generators[generatorId] = me.match(...args);
+	  					const next = await generator.next();
+	  					//console.log("next",generatorId,args,next)
+	  					if(next.done) setTimeout(() => delete fos.generators[generatorId]);
+	  					//console.log(next.value,next.value ? next.value._ : null)
+	  					const target = next.value ? Object.assign({},next.value) : next.value;
+	  					if(next.value && next.value._) target._ = next.value._;
+	  					return target;
+	  				}
+	  			},
+	  			{allow:"*",name:"ReasonDBServer"}
+	  	);
+		if(options.static) fos.static("/",{location:options.static});
+		fos.listen(port);
 	}
 }

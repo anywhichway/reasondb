@@ -1,6 +1,6 @@
 {
 	"name": "reasondb",
-	"version": "1.0.1b",
+	"version": "1.0.3b",
 	"description": "A JavaScript schema optional extensible key-value backed datastore supporting element level security, triggers, query pipelines, graphs, objects, documents, and joins.",
 	"private": false,
 	"isomorphic": true,
@@ -30,9 +30,9 @@
 	},
 	"dependencies": {
 		"esm": "^3.0.84",
+		"fos": ">=0.0.9-a",
 		"ioredis": "^4.3.0",
 		"js-sha3": "^0.7.0",
-		"nano-pipe": "0.0.6",
 		"node-fetch": "^1.7.1"
 	},
 	"devDependencies": {
@@ -48,6 +48,7 @@
 		"kvvs": "0.0.1-a",
 		"localforage": "^1.7.2",
 		"mocha": "^3.4.2",
+		"performance-now": "^2.1.0",
 		"redis": "^2.8.0",
 		"scattered-store": "^1.0.0",
 		"webpack": "^4.28.3",

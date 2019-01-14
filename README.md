@@ -4,15 +4,15 @@ A multi model 100% JavaScript database supporting:
 
 1) key/values, graphs, documents
 
-2) Industry standard [Storage API](https://developer.mozilla.org/en-US/docs/Web/API/Storage) (except asynchronous), or graph API similar to [GunDB](https://gun.eco/), or SQL like syntax.
+2) Industry standard [Storage API](https://developer.mozilla.org/en-US/docs/Web/API/Storage) (except `ReasonDB` is asynchronous), or a graph API similar to [GunDB](https://gun.eco/), or SQL like syntax.
 
 3) Can be used with almost any key/value backing store.
 
-4) regular, natural, and cross joins
+4) joins
 
 6) standard array like functions for iterating over results, e.g. `map`, `forEach`, etc.
 
-7) inline functions or over 50 pre-defined predicates, e.g. $eq, $gt, $isIPAddress
+7) inline functions or over 30 pre-defined predicates, e.g. $eq, $gt, $isIPAddress
 
 8) automatic data expiration based on dates or durations
 
@@ -23,7 +23,11 @@ Full documentation is available at https://anywhichway.github.io/reasondb
 
 ## Updates (reverse chronological order)
 
-2018-01-03 v1.0.1b Merged AnyWhichWay into ReasonDB
+2018-01-13 v1.0.3b Basic replication now working.
+
+2018-01-12 v1.0.2b Documentation enhancements. Added `update` to SQL like commands and statistical methods to cursors.
+
+2018-01-03 v1.0.1b Merged AnyWhichWay into ReasonDB. NOTE: There are substantial API and functonality changes. Databases and applications developed with v0.*.* are not compatible.
 
 2017-05-23 v0.3.2 Improved fastForEach
 
