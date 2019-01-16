@@ -1,10 +1,10 @@
-JOQULAR provides a simple declaritive way to match JSON objects during query processes. It is based heavily on the MongoDB pattern matching approach but adds support for inline tests and simple extension.
+`JOQULAR` provides a simple declaritive way to match JSON objects during query processes. It is based heavily on the MongoDB pattern matching approach but adds support for inline tests and simple extension.
 
-In the context of ReasonDB, JOQULAR provides built-in 56 predicates, almost infinite possibilities with inline tests, and and can be extended with new `$` predicates in as little as one line of code.
+In the context of `ReasonDB`, `JOQULAR` provides built-in 56 predicates, almost infinite possibilities with inline tests, and and can be extended with new `$` predicates in as little as one line of code.
 
 The predicates can be broken down into a number of categories including <a href="#comparison-operators">comparisons</a> like `$lt`, <a href="#set-and-array-operators">set and array operations</a> like `$includes`, <a href="#type-tests">type tests</a> like `$isSSN`, <a href="#text-search-tests">text search tests</a>, and <a href="#logical-operators">logical operators</a> like `$and`. You can also use <a href="#inline-tests">inline tests</a> and <a href="#custom-predicates">custom predicates</a>.
 
-The basic use of JOQULAR is best shown with an example. The pattern `{age:{$gte: 21}}` will match `{name: "joe", age: 22}` and `{name: "mary", age: 21}` but not `{name: "mark", age:19}`.
+The basic use of `JOQULAR` is best shown with an example. The pattern `{age:{$gte: 21}}` will match `{name: "joe", age: 22}` and `{name: "mary", age: 21}` but not `{name: "mark", age:19}`.
 
 In some cases, predicates can take multiple arguments. When this happens, an array shoul dbe used to express the arguments. See `$between` and `$matches` for an example.
 
@@ -114,12 +114,12 @@ Predicates may be of type `async` and/or return `Promises`. If they do, `ReasonD
 Below is the definition of `$eq`.
 
 ```javascript
-	function $eq(a,b) { 
-		return a == b; 
-	}
+function $eq(a,b) { 
+	return a == b; 
+}
 ```
 
-To add predicates to ReasonDB, just pass them in as an keyed object value for the property `predicates` on the `options` object when creating a database instance, e.g. `new ReasonDB({predicates:{$eq}})`.
+To add predicates to `ReasonDB`, just pass them in as an keyed object value for the property `predicates` on the `options` object when creating a database instance, e.g. `new ReasonDB({predicates:{$eq}})`.
 
 Predicates that are not defined this way rely on internals of `ReasonDB` that may change over time and how to create them is not the subject of further documentation.
 
