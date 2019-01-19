@@ -8,4 +8,6 @@ The API is broken down by its major components. For each component the functions
 
 4) Return value type documentation.
 
-5) Documentation for directly thrown errors. Note, exceptions are not yet fully documented and the lack of documentation does not mean an execption can't be thrown.
+5) Documentation for directly thrown errors. Note, exceptions are not yet fully documented and the lack of documentation does not mean an exception can't be thrown.
+
+6) An example
