@@ -2,4 +2,6 @@ When released in October of 2016, `ReasonDB` was the first 100% native JavaScrip
 
 Now, `ReasonDB` v1.x.x-b (currently in beta) also supports document and graph based storage and querying, functional queries, asynchronous cursors, 32 built-in predicates, fully indexed Dates, joins, multi-source conflict resolution, automatic data expiration, object validation and property aliasing, compuation, and defaults using an enhanced version of JOQULAR. All of this can be done on top of almost any key value store including `localStorage` and `Redis`.
 
-ReasonDB does not require that the class of objects stored be a subclass of any other class, nor does it require objects provide a special calling interface. ReasonDB is probably more compatible with existing object models than any other JSON database. All objects inserted to the database can be activated so that they automatically save when changed or more controlled procedural and functional approaches can be used.
+`ReasonDB` does not require that the class of objects stored be a subclass of any other class, nor does it require objects provide a special calling interface. ReasonDB is probably more compatible with existing object models than any other JSON database. All objects inserted to the database can be activated so that they automatically save when changed or more controlled procedural and functional approaches can be used.
+
+`ReasonDB` is available via [GitHub](https://github.com/anywhichway/reasondb) and [NPM](https://www.npmjs.com/package/reasondb) under an MIT license.

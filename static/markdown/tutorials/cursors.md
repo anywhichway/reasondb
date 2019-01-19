@@ -4,7 +4,7 @@ ReasonDB cursors also support the statistical methods `random` and `sample`.
 
 If the array like function called does not require accessing all items in the cursor, then results are effectively streamed one at a time. This works across client-server boundaries.
 
-Assume the following data is in the database:
+Assume the this data is in the database:
 
 ```javascript
 {userId: 1, name: "joe", age:26}
@@ -27,7 +27,7 @@ Then you can do the following:
 	// and reset the cursor to use it again
 	cursor.reset();
 	
-	// all arraylike functions return Promises
+	// and use arraylike functions that return Promises
 	// they also provide the same argument signature as their Array counterparts
 	cursor.forEach((object,index,generator) => console.log(object,index))
 	 .then(count => console.log("count",count));
@@ -50,17 +50,17 @@ Then you can do the following:
 	// Note: this does increase RAM usage
 	cursor = cursor.withMemory({seek:true});
 	
-	//the first time an index is accessed, it must be awaited
+	// the first time an index is accessed, it must be awaited
 	console.log(await cursor[1]); 
 	
 	// when using arraylike functions, no reset is required if withMemory has been called
 	cursor.forEach((object,index,generator) => console.log(object,index))
 	 .then(count => console.log("count",count));
 	 
-	//since forEach above accesses every array element, await is not needed below
+	// since forEach above accesses every array element, await is not needed below
 	console.log(cursor[2]);
 	
-	//although awaiting will not hurt
+	// although awaiting will not hurt
 	console.log(await cursor[2]);
 	
 	// arraylike functions can even call other async functions
@@ -77,7 +77,7 @@ Then you can do the following:
 	await sample = cursor.random(2); 
 	console.log(sample); // will be an array with 2 elements
 	
-	// you can even sample based on numeric properties
+	// you can sample based on numeric properties
 	// use a margin of error of 50% at a confidence interval of .999
 	await sample = cursor.sample({me:.5,ci:999,key:"age"}); 
 	console.log(sample); // will be an array with 2 elements
