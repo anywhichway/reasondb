@@ -7,9 +7,9 @@ import {generx} from "./generx.js";
 
 export function enhanceGenerators(scope,fnames,{all}={}) { 
 	for(const fname of fnames) {
-		const f = generx(scope[fname]),
-			self = scope[fname] = function(...args) {
-				const generator = f.call(this,...args);
+		const f1 = generx(scope[fname]),
+			f2 = function(...args) {
+				const generator = f1.call(this,...args);
 				if(all) {
 					for(const f of all) {
 						generator[f.name] = async function(...args) {
@@ -23,6 +23,7 @@ export function enhanceGenerators(scope,fnames,{all}={}) {
 					}
 				}
 				return generator;
-			};
+			}
+		Object.defineProperty(scope,fname,{enumerable:false,configurable:true,writable:true,value:f2})
 	}
 }

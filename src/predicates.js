@@ -107,7 +107,7 @@ export const predicates = {
 	async $isArray() { 
 		const	edges = [];
 		for(const key in this.edges) {
-			if(key.indexOf("Array@")===0 && isSoul(key)) {
+			if(key.startsWith("Array@") && isSoul(key)) {
 				edges.push(await getNextEdge(this,key,false));
 			}
 		}
@@ -171,6 +171,13 @@ export const predicates = {
 	},
 	$self(f) {
 		return f(this._value);
+	},
+	$valid(validations) {
+		return Object.keys(validations).every(validationKey => {
+			const valid = predicates[validationKey](this,validations[validationKey]);
+			if(!valid) throw(new TypeError(`failed validation ${validationKey} for ${this}`));
+			return valid;
+		})
 	}
 }
 for(const key of ["date","day","fullYear","hours","milliseconds","minutes","month","seconds","time","UTCDate","UTCDay","UTCFullYear","UTCHours","UTCSeconds","UTCMilliseconds","UTCMinutes","UTCMonth","year"]) {

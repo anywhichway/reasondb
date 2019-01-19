@@ -18,16 +18,17 @@ A multi model 100% JavaScript database supporting:
 
 9) full text indexing
 
-
 Full documentation is available at https://anywhichway.github.io/reasondb
 
 ## Updates (reverse chronological order)
 
-2018-01-13 v1.0.3b Basic replication now working.
+2019-01-19 v1.0.4b Corrected years in this update list. Enhanced JOQULAR to support projections and validation.
 
-2018-01-12 v1.0.2b Documentation enhancements. Added `update` to SQL like commands and statistical methods to cursors.
+2019-01-13 v1.0.3b Basic replication now working.
 
-2018-01-03 v1.0.1b Merged AnyWhichWay into ReasonDB. NOTE: There are substantial API and functonality changes. Databases and applications developed with v0.*.* are not compatible.
+2019-01-12 v1.0.2b Documentation enhancements. Added `update` to SQL like commands and statistical methods to cursors.
+
+2019-01-03 v1.0.1b Merged AnyWhichWay into ReasonDB. NOTE: There are substantial API and functonality changes. Databases and applications developed with v0.*.* are not compatible.
 
 2017-05-23 v0.3.2 Improved fastForEach
 

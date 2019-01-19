@@ -1,5 +1,7 @@
 import {cartesianAsyncGenerator} from "./cartesianAsyncGenerator.js";
 
+import {ConstraintViolationError} from "./errors.js";
+
 import {deepEqual} from "./deepEqual.js";
 
 import {Edge} from "./Edge.js";
@@ -21,8 +23,6 @@ import {LFRUStorage} from "./LFRUStorage.js";
 import {MemoryStorage} from "./MemoryStorage.js";
 
 import {predicates} from "./predicates.js";
-
-import {promisify} from "./promisify.js";
 
 import {stemmer} from "./stemmer.js";
 
@@ -46,38 +46,99 @@ import {Update} from "./sql-like/update.js";
 
 import {STOPWORDS} from "./stopwords.js";
 
-function indexableDate(date,full,object) {
-	if(full==="full") {
+const indexableDate = (date,full,object) => { // create a datelike object with extra keys for indexing
+		if(full==="full") {
+			return {
+				time: date.getTime(),
+				day: date.getUTCDay(),
+				date: date.getUTCDate(),
+				hours: date.getUTCHours(),
+				milliseconds: date.getUTCMilliseconds(),
+				minutes: date.getUTCMinutes(),
+				month: date.getUTCMonth(),
+				seconds: date.getUTCSeconds(),
+				year: date.getUTCFullYear()
+			}
+		}
 		return {
-			time: date.getTime(),
-			day: date.getUTCDay(),
-			date: date.getUTCDate(),
-			hours: date.getUTCHours(),
-			milliseconds: date.getUTCMilliseconds(),
-			minutes: date.getUTCMinutes(),
-			month: date.getUTCMonth(),
-			seconds: date.getUTCSeconds(),
-			year: date.getUTCFullYear()
+			time: date.getTime()
 		}
-	}
-	return {
-		time: date.getTime()
-	}
-}
-
-function flatten(object) {
-	let objects = [];
-	for(const key in object) {
-		const value = object[key],
-			type = typeof(value);
-		if(value && type==="object" && key!=="_") {
-			if(!value.atomic) objects = objects.concat(flatten(value));
-			if(value["#"]) object[key] = value["#"];
+	},
+	flatten = (object) => { // flatten and Array or a regular object into a single level array
+		let objects = [];
+		for(const key in object) {
+			const value = object[key],
+				type = typeof(value);
+			if(value && type==="object" && key!=="_") {
+				if(!value.atomic) objects = objects.concat(flatten(value));
+				if(value["#"]) object[key] = value["#"];
+			}
 		}
+		if(object["#"]) objects.push(object);
+		return objects;
+	},
+	removeKeys = (object,keys) => { // recursively remove keys from an object
+		let removed;
+		Object.keys(object).forEach(key => {
+			if(keys.includes(key)) {
+				if(!removed) removed = {};
+				removed[key] = object[key];
+				delete object[key];
+			}
+			if(object[key] && typeof(object[key])==="object") {
+				const childremoved = removeKeys(object[key],keys);
+				if(childremoved) {
+					if(!removed) removed = {};
+					removed[key] = childremoved;
+				}
+			}
+		})
+		return removed;
+	},
+	resolveFor = (db,object,resolvers={}) => {
+		Object.keys(resolvers).forEach(resolverKey => {
+			if(typeof(resolvers[resolverKey])==="object") {
+				if(resolvers[resolverKey].$compute) {
+					object[resolverKey] = resolvers[resolverKey].$compute.call(object);
+				}
+				if(resolvers[resolverKey].$default && object[resolverKey]==null) {
+					object[resolverKey] = resolvers[resolverKey].$default;
+				}
+				const value = object[resolverKey];
+				if(value && typeof(value)==="object") {
+					resolveFor(value,resolvers[resolverKey]);
+				}
+				if(resolvers[resolverKey].$valid) {
+					if(typeof(resolvers[resolverKey].$valid)==="function") {
+						resolvers[resolverKey].$valid(value,resolverKey,object);
+					} else {
+						try {
+							db.predicates.$valid.call(value,resolvers[resolverKey].$valid);
+						} catch(error) {
+							error = new ConstraintViolationError(`${resolverKey} ${error.message}`);
+							if(resolvers[resolverKey].$valid.onError) {
+								resolvers[resolverKey].$valid.onError(error,value,resolverKey,object);
+							} else {
+								throw error;
+							}
+						}
+					}
+				}
+			}
+		});
+		Object.keys(object).forEach(key => {
+			if(resolvers[key] && typeof(resolvers[key])==="object") {
+				if(object[key] && typeof(object[key])==="object") {
+					object[key] = resolveFor(db,object[key],resolvers[key]);
+				}
+				if(resolvers[key] && resolvers[key].$as) {
+					object[resolvers[key].$as] = object[key];
+					delete object[key];
+				}
+			}
+		})
+		return object;
 	}
-	if(object["#"]) objects.push(object);
-	return objects;
-}
 
 const SCHEMA = {
 	Array:{ctor:Array},
@@ -90,6 +151,13 @@ const SCHEMA = {
 const MEMORYSTORAGE = new MemoryStorage();
 
 export class Database {
+	static async(f) {
+		return function(...args) {
+			setTimeout(() => f(...args));
+			if(args.length===0) return true;
+			return args[0];
+		}
+	}
 	static get memoryStorage() {
 		return MEMORYSTORAGE;
 	}
@@ -98,15 +166,14 @@ export class Database {
 	}
 	constructor(options={}) {
 		enhanceGenerators(this,["get","match","matchObjects","matchPath"],{all:[Edge.prototype.value,Edge.prototype.on,Edge.prototype.secure,Edge.prototype.patch,Edge.prototype.put]});
-		this.options = options = Object.assign({},options);
+		options = Object.assign({},options);
 		if(!options.authenticate) options.authenticate = () => true;
 		if(!options.storage) options.storage = MEMORYSTORAGE;
 		this.schema = Object.assign({},SCHEMA,options.schema);
 		this.predicates = Object.assign({},predicates,options.predicates);
-		this.cache = new LFRUStorage();
-		this.Edge = (config={},force) => {
-			return new Edge(this,config,force);
-		}
+		if(options.cache) this.cache = typeof(options.cache)==="object" ? options.cache : new LFRUStorage();
+		Object.defineProperty(this,"options",{value:options});
+		Object.freeze(this.options);
 		if(options.onready) this.onready = options.onready;
 		this.remote = options.remote||[];
 		this.initialized = new Promise(async resolve => {
@@ -114,7 +181,7 @@ export class Database {
 			if(options.clear) await this.clear();
 			if(options.authenticate) await options.authenticate.call(this);
 			const root = await storage.getItem("/");
-			if(!root) await storage.setItem("/",JSON.stringify(this.Edge()));
+			if(!root) await storage.setItem("/",Edge.stringify(new Edge(this)));
 			await this.secure();
 			this.expire();
 			if(options.listen) this.listen(options.listen,options);
@@ -208,7 +275,7 @@ export class Database {
 	async clear() {
 		const storage = this.options.storage;
 		await storage.clear();
-		await storage.setItem("/",JSON.stringify(this.Edge()));
+		await storage.setItem("/",JSON.stringify(await this.Edge()));
 	}
 	compile(value,{indexDates,inline}={}) {
 		if(value==="*") return () => true;
@@ -249,9 +316,9 @@ export class Database {
 					tokens.trigrams = trigrams(tokens.stems).filter(gram => !STOPWORDS.includes(gram));
 				}
 				if(pname && test) {
-					if(keys.length>1) throw new Error(`Property values can contain only one predicate test: ${JSON.stringify(keys)}`);
+					if(keys.filter(key => key[0]==="$").length>1) throw new JOQULARTypeError(`Property values can contain only one predicate test: ${JSON.stringify(keys)}`);
 					if(test.length<=2) return Function("test","arg","tokens",`return function ${pname}(x) { return arg==="$true!" || test.bind(this)(x,arg,tokens); }`)(test,arg,tokens);
-					if(!Array.isArray(arg)) throw new Error(`Predicate ${pname} expected array as argument and recieved ${arg}`);
+					if(!Array.isArray(arg)) throw new JOQULARTypeError(`Predicate ${pname} expected array as argument and recieved ${arg}`);
 					return Function("test","arg",`return function ${pname}(x) { return test.bind(this)(x,...arg); }`)(test,arg);
 				}
 		}
@@ -259,6 +326,27 @@ export class Database {
 	}
 	delete() {
 		return new Delete(this);
+	}
+	async Edge(config={},force) {
+		let edge;
+		if(!force && this.cache) {
+			edge = this.cache.getItem(config.path||"/");
+		}
+		if(edge) return edge;
+		edge = await this.options.storage.getItem(config.path||"/");
+		if(edge) {
+			edge = Object.assign(Object.create(Edge.prototype),Edge.parse(edge));
+			Object.defineProperty(edge,"db",{value:this});
+			if(this.cache) {
+				this.cache.setItem(config.path||"/",edge);
+			}
+			return edge;
+		}
+		edge = new Edge(this,config);
+		if(!this.cache) {
+			this.options.storage.setItem(config.path||"/",Edge.stringify(edge));
+		}
+		return edge;
 	}
 	expire(interval) {
 			interval || (interval=this.options.expirationInterval);
@@ -281,14 +369,14 @@ export class Database {
 		expireData();
 	}
 	async* get(path) {
-		if(path.indexOf("http://")===0 || path.indexOf("https://")===0) {
+		if(typeof(path)==="string" && (path.startsWith("http://") || path.startsWith("https://"))) {
 			const response = await fetch(path),
 				value = response.json();
 			if(value.edges && typeof(value.edges)==="object") {
 				value.path = path;
-				yield this.Edge(value);
+				yield await this.Edge(value);
 			} else {
-				yield this.Edge({path,value});
+				yield await this.Edge({path,value});
 			}
 			return;
 		}
@@ -298,7 +386,7 @@ export class Database {
 			yield {edges:{[parts[0]]:true}};
 			return;
 		}
-		const root = this.Edge();
+		const root = await this.Edge();
 		for await(const last of root.get(parts.shift(),undefined,parts)) {
 			yield last;
 		}	
@@ -342,9 +430,9 @@ export class Database {
 			})
 		}
 		if(!read) {
-			object = this.cache.getItem(id);
+			object = this.cache ? this.cache.getItem(id) : undefined;
 			if(object) {
-				return await this.restore(object,{partial,read});
+				return await this.restore(object,{partial,read}); // limit down to partial
 			}
 		}
 		let data = await this.options.storage.getItem(id);
@@ -352,7 +440,7 @@ export class Database {
 			if(remoted) return await remoted;
 		} else {
 			object = await this.restore(typeof(data)==="string" ? JSON.parse(data) : data,{partial,read});
-			return nocache ? object : this.cache.setItem(id,object);
+			return !nocache && this.cache ? this.cache.setItem(id,object) : object;
 		}
 	}
 	getPaths(value,{ctor=value.constructor,indexDates}={},path,allpaths=[],parent={},schema,key) { // gets paths for both regular objects and match patterns
@@ -429,7 +517,7 @@ export class Database {
 			}
 	}
 	async graph(object,{ctor,indexDates,leaf}={}) {
-		const root = this.Edge();
+		const root = await this.Edge();
 		for(let path of this.getPaths(object,{ctor,indexDates})) {
 			if(leaf) path.push(leaf);
 			const fullpath = path.slice();
@@ -473,12 +561,13 @@ export class Database {
 			}
 		} else if(pathOrObject && type==="object") {
 			//console.log(pathOrObject)
+			const resolvers = removeKeys(pathOrObject,["$as","$compute","$default","$valid"]);
 			for await(const id of this.matchObjects(pathOrObject,ctor)) {
 				//console.log(id)
 				const object = await this.getObject(id,{partial:partial ? pathOrObject : null,read});
 				if(object) {
 					found[id] = true;
-					yield object;
+					yield resolveFor(this,object,resolvers);
 				}
 			}
 		}
@@ -491,7 +580,6 @@ export class Database {
 						object = await remote.server.match(cursorid,pathOrObject,{ctor,partial});
 						if(object) {
 							this.putItem(await this.bless(object),{local:true});
-							if(!found[object["#"]]) yield object;
 						}
 					} while(object);
 				}
@@ -531,11 +619,12 @@ export class Database {
 		if(!pathids) return;
 		for(const id in pathids) yield id;
 	}
-	async putItem(object,{force,indexDates,reactive,expireAt,atomic=object._?object._.atomic:undefined,source,local}=this.options) {
+	async putItem(object,{force,unique,indexDates,reactive,expireAt,atomic=object._?object._.atomic:undefined,source,local}=this.options) {
 		const id = object["#"];
 		if(id) {
 			const existing = await this.getObject(id,{read:true,nocache:true,local:true});
 			if(existing) {
+				if(unique) throw new ConstraintViolationError(`${id} already exists`);
 				object = this.arbitrate(object,existing);
 				if(!object) return;
 				const oldvalues = mergeObjects(existing,object);
@@ -566,8 +655,7 @@ export class Database {
 		return object;
 	}
 	reactor(object) {
-		const db = this,
-			root = db.Edge();
+		const db = this;
 		return new Proxy(object,{
 			get(target,property) {
 				const value = target[property];
@@ -584,7 +672,7 @@ export class Database {
 					.then(() => {
 						db.get(`${target.constructor.name}/${property}/${value}`).forEach(async edge => {
 								edge.edges[target["#"]] = true;
-								edge.save();
+								await edge.save();
 						});
 				});
 				return true;
@@ -608,7 +696,7 @@ export class Database {
 			}
 		}
 		if(objectOrKey && objectOrKey["#"]) {
-			this.cache.removeItem(objectOrKey["#"]);
+			if(this.cache) this.cache.removeItem(objectOrKey["#"]);
 			await this.options.storage.removeItem(objectOrKey["#"]); // only handles atomic?
 			await this.ungraph(objectOrKey._,{indexDates:true,leaf:objectOrKey["#"]});
 			await this.ungraph(objectOrKey,{leaf:objectOrKey["#"]});
@@ -626,7 +714,7 @@ export class Database {
 			const [cname,id] = data["#"].split("@"),
 				object = cname==="Array" ? [] : (cname==="Date" ? new Date(parseInt(id)) : Object.create(this.schema[cname].ctor.prototype)),
 				keys = Object.keys(data);
-			keys.push("_");
+			if(!keys.includes("_")) keys.push("_");
 			for(const key of keys) {
 				if(key==="_") {
 					if(data._) {
@@ -701,8 +789,13 @@ export class Database {
 				} else {
 					target[key] = Referencer.generateId(value);
 				}
+				//else if(value===Infinity) target[key] = "@Infinity";
+				//else if(value===-Infinity) target[key] = "@-Inifinity";
+				//else if(typeof(value)==="number" && isNaN(value)) target[key] = "@NaN";
+				//else if(value!==undefined) target[key] = value;
 			}
 			if(object._) {
+				//if(save && !same) this.version(object,{expireAt,atomic});
 				if(atomic && object._atomic===undefined) object._.atomic = true;
 				target["#"] = object["#"];
 				target._ = Object.assign({},object._);
@@ -711,11 +804,11 @@ export class Database {
 				}
 				if(save && !same && target["#"]) {
 					await this.options.storage.setItem(target["#"],JSON.stringify(target));
-					this.cache.setItem(object["#"],object);
+					if(this.cache) this.cache.setItem(object["#"],object);
 					await this.graph(object._,{ctor:object.constructor,indexDates:true,leaf:object["#"]}); //"full"
 				}
 			}
-			return !recursing || atomic || explode ? target : target["#"];
+			return !recursing || atomic || !explode ? target : target["#"];
 	}
 	async setItem(key,value,{local}={}) {
 		const type = typeof(value),
@@ -738,7 +831,7 @@ export class Database {
 		return new Update(this,ctorOrClassName);
 	}
 	async ungraph(object,{indexDates,leaf}={}) {
-		const root = this.Edge();
+		const root = await this.Edge();
 		for(let path of this.getPaths(object,{indexDates})) {
 			if(leaf) path.push(leaf);
 			const key = path.shift();
@@ -756,6 +849,7 @@ export class Database {
 		if(expireAt) metadata.expireAt = expireAt;
 		metadata.modifiedAt = new Date(); 
 		metadata.version++;
+		//if(!atomic && !metadata.atomic) Object.keys(object).forEach(key => key==="_" || !object[key] || typeof(object[key])!=="object" || this.version(object[key]))
 	}
 }
 

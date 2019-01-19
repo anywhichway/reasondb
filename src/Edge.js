@@ -9,14 +9,27 @@ import {mergeObjects} from "./mergeObjects.js";
 import {isSoul} from "./isSoul.js";
 
 export class Edge {
-	constructor(db,config,force) {
+	static parse(string) {
+		return JSON.parse(string,(_,value) => {
+		  if(typeof(value)==="string" && value.indexOf("Function@")===0) {
+		  	return Function("return " + value.substring(9))();
+		  }
+		  return value;
+		});
+	}
+	static stringify(edge) {
+		return JSON.stringify(edge,(_,value) => {
+		  if(typeof(value)==="function") {
+		  	return "Function@" + value;
+		  }
+		  return value;
+		});
+	};
+	constructor(db,config) {
 		config || (config={path:"/"});
 		Object.assign(this,config);
 		if(!this.path) this.path = "/";
-		if(!force) {
-			const edge = db.cache.getItem(this.path);
-			if(edge) return edge;
-		}
+		
 		if(!this.edges) this.edges = {};
 		if(!this.acls) this.acls = {
 				r: { //read
@@ -29,9 +42,8 @@ export class Edge {
 				}
 		}
 		Object.defineProperty(this,"db",{enumerable:false,configurable:false,writable:false,value:db});
-		enhanceGenerators(this,["get"],{all:[this.merge,this.value,this.on,this.secure]});
-		if(!force) {
-			this.dirty = true;
+		enhanceGenerators(this,["get"],{all:[this.merge,this.patch,this.value,this.on,this.off,this.secure,this.remove]});
+		if(db.cache) {
 			db.cache.setItem(this.path,this);
 		}
 	}
@@ -67,10 +79,10 @@ export class Edge {
 		await this.save(options);
 		return this;
 	}
-	callback(callbacks,value,previousvalue) {
+	async callback(callbacks,value,previousvalue) {
 		if(callbacks) {
 			for(const f of callbacks) {
-				const replacementvalue = f.call(this,value,previousvalue);
+				const replacementvalue = await f.call(this,value,previousvalue);
 				if(replacementvalue===undefined) break;
 				if(typeof(replacementvalue)!=="object" || !(replacementvalue && replacementvalue instanceof Promise)) {
 					value = replacementvalue;
@@ -81,6 +93,20 @@ export class Edge {
 	}
 	compile(key) {
 		if(typeof(key)==="string") {
+			if(key==="$_") {
+				return {key:() => true};
+			}
+			if(key[0]==="/") {
+				try {
+					const regexp = Function("return " + key)();
+					return {key:(key) => {
+							return regexp.test(key);
+						}
+					}
+				} catch(e) {
+					; // ignore
+				}
+			}
 			const parts = key.split(":");
 			let result = key,
 				condition = parts[0].trim();
@@ -100,7 +126,7 @@ export class Edge {
 					}
 				}
 			}
-			if(parts.length===1)return result;
+			if(parts.length===1) return result;
 			if(typeof(result)!=="object") result = {key:parts[0]};
 			condition = parts[1].trim();
 			if(condition.indexOf("=>")===0) {
@@ -171,10 +197,13 @@ export class Edge {
 							delete this.yield;
 							return;
 						} else {
-							//this.edges[key] = true;
 							const next = await getNextEdge(this,edgekey);
 							if(test && !test(next._value)) return;
 							if(next) {
+								if(!this.db.options.cache) {
+									await this.save({force:true});
+								}
+								await this.callback(this.onextend,next);
 								if(path.length===0) {
 									if(next.aclRead(true)) yield next;
 								} else if(path.length===1 && path[0]===key && isSoul(key)) {
@@ -189,8 +218,13 @@ export class Edge {
 					}
 				}
 			} else {
+				const exists = this.edges[key];
 				this.edges[key] = true;
+				if(!this.db.options.cache) {
+					await this.save({force:true});
+				}
 				const next = await getNextEdge(this,key);
+				if(!exists) await this.callback(this.onextend,next);
 				if(test && !test(next._value)) return;
 				if(path.length===0) {
 					if(next.aclRead(true)) yield next;
@@ -210,19 +244,23 @@ export class Edge {
 	async merge(value,options) {
 		return this.value(value,true,options);
 	}
-	on(callbacks) {
+	async on(callbacks) {
 		for(const event in callbacks) {
-			if(!this["on"+event]) {
-				Object.defineProperty(this,"on"+event,{enumerable:false,configurable:true,writable:true,value:new Set()});
+			const ename = "on"+event;
+			if(!this[ename]) {
+				this[ename] = [];
 			}
-			this["on"+event].add(callbacks[event]);
+			if(!this[ename].includes(callbacks[event])) this[ename].push(callbacks[event])
 		}
+		if(!this.db.cache) await this.save({force:true});
 		return this;
 	}
-	off(callbacks) {
+	async off(callbacks) {
 		for(const event in callbacks) {
-			if(this["on"+event]) this["on"+event].delete(callbacks[event]);
+			const ename = "on"+event;
+			if(this[ename]) this[ename].map(callback => callbacks[event]+""!==callback+"");
 		}
+		if(!this.db.cache) await this.save({force:true});
 		return this;
 	}
 	once(callback,options={wait:0}) {
@@ -243,14 +281,24 @@ export class Edge {
 				value = await this.callback(this.onchange,value,this._value);
 			}
 			this._value = value && typeof(value)==="object" && value["#"] ? value["#"] : value;
-			this.dirty = true;
-			await this.save();
+			await this.save({force:true});
 		}
 		return value;
 	}
 	async parent(read) {
-		const data = read ? await this.db.options.storage.getItem(this.parentKey) : this.db.cache.getItem(this.parentKey) || await this.db.options.storage.getItem(this.parentKey);
-		if(data) return this.db.Edge(typeof(data)==="string" ? JSON.parse(data) : data,read);
+		let edge;
+		if(!read && this.db.cache) {
+			edge = this.db.cache.getItem(this.parentKey) || await this.db.options.storage.getItem(this.parentKey);
+		} else {
+			edge = await this.db.options.storage.getItem(this.parentKey);
+			if(edge) {
+				edge = Object.assign(Object.create(Edge.prototype),Edge.parse(edge));
+				Object.defineProperty(edge,"db",{value:this.db});
+				if(this.db.cache) this.db.cache.setItem(this.parentKey,edge) 
+			}
+		}
+		//if(edge) return await this.db.Edge(typeof(edge)==="string" ? JSON.parse(edge) : edge,read);
+		return edge;
 	}
 	async patch(value,{indexDates,indexAllObjects,expireAt,atomic}=this.db.options) {
 		if(value && typeof(value)==="object") {
@@ -276,8 +324,7 @@ export class Edge {
 			}
 		}
 		this._value = value && typeof(value)==="object" && value["#"] ? value["#"] : value;
-		this.dirty = true;
-		await this.save();
+		await this.save({force:true});
 		return value;
 	}
 	get parentKey() {
@@ -285,9 +332,18 @@ export class Edge {
 		parts.pop();
 		return parts.length>0 ? parts.join("/") : "/";
 	}
-	async removeEdge(key) {
+	async remove() {
+		const parent = await this.parent();
+		if(parent) {
+			await parent.removeEdge(this.key(),this);
+		}
+	}
+	async removeEdge(key,edge) {
+		if(edge) {
+			if(this.onremove && !this.callback(this.onremove,edge)) return;
+		}
 		delete this.edges[key];
-		await this.save();
+		await this.save({force:true});
 		await this.db.options.storage.removeItem(this.path+"/"+key);
 		if(Object.keys(this.edges).length===0) {
 			const parent = await this.parent();
@@ -302,9 +358,9 @@ export class Edge {
 		if(existingparent && !existingparent.edges[edge.key]) {
 			edge = await edge.callback(parent.onextend,this);
 		}
-		if(!edge) return;
+		if(!edge || typeof(edge)!=="object") return;
 		delete edge.dirty;
-		let promise = edge.db.options.storage.setItem(edge.path,JSON.stringify(edge));
+		let promise = edge.db.options.storage.setItem(edge.path,Edge.stringify(edge));
 		if(!promise || typeof(promise)!=="object" || !(promise instanceof Promise)) promise = Promise.resolve();
 		promise.catch(e => { edge.dirty=true; throw e; });
 		if(callback) {

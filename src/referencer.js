@@ -22,6 +22,9 @@ Function.generateId = function(value,prefix) { return `${prefix}${value}`; }
 Number.dereference = (string,prefixDelimiter="@") => {
 	const parts = string.split(prefixDelimiter);
 	if(parts.length===1) return JSON.parse(parts[0]);
+	if(parts[1]==="Infinity") return Infinity;
+	if(parts[1]==="-Infinity") return -Infinity;
+	if(parts[1]==="NaN") return NaN;
 	return JSON.parse(parts[1]);
 }
 Number.generateId = function(value,prefix) {
@@ -37,7 +40,8 @@ const CTORS = {
 	Date,
 	Function,
 	Object,
-	Array
+	Array,
+	Number
 };
 
 const OPTIONS = { };
@@ -54,7 +58,7 @@ export const Referencer = {
 			let instance;
 			if(ctor.dereference) {
 				instance = ctor.dereference(value,OPTIONS.prefixDelimiter);
-				if(instance && typeof(instance)!=="object") {
+				if(isNaN(instance) || (instance && typeof(instance)!=="object")) {
 					return instance; // a special case, e.g. Number@Infinity
 				}
 			} else {
@@ -67,7 +71,11 @@ export const Referencer = {
 			value.forEach((item,i,array) => array[i] = this.dereference(item,OPTIONS.prefixDelimiter));
 		} else if(value && type==="object") {
 			Object.keys(value).forEach((name) => {
-				name===key || (value[name] = this.dereference(value[name],OPTIONS.prefixDelimiter));
+				try {
+					name===key || (value[name] = this.dereference(value[name],OPTIONS.prefixDelimiter));
+				} catch(e) {
+					; // some properties will be read-only
+				}
 			});
 		}
 		return value;

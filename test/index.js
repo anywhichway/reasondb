@@ -131,28 +131,36 @@ describe("basic",function() {
 		});
 	});
 	it("primitive value test /a/b:>=0/c:=>c==0",function(done) {
-		db.get("/a/b:>=0/c:=>c==0").value().then(value => {
-			try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
-			done();
-		});
+		db.get("/a/b:>=0/c:=>c==0")
+			.value()
+			.then(value => {
+				try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
+				done();
+			});
 	});
 	it("primitive value predicate test /a/b/c:$gt(-1)",function(done) {
-		db.get("/a/b/c:$gt(-1)").value().then(value => {
-			try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
-			done();
-		});
+		db.get("/a/b/c:$gt(-1)")
+			.value()
+			.then(value => {
+				try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
+				done();
+			});
 	});
 	it("path key test /==='a'/(key)=>key==='b':>=0/c:=>c==0",function(done) {
-		db.get("/==='a'/(key)=>key==='b':>=0/c:=>c==0").value().then(value => {
-			try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
-			done();
-		});
+		db.get("/==='a'/(key)=>key==='b':>=0/c:=>c==0")
+			.value()
+			.then(value => {
+				try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
+				done();
+			});
 	});
 	it("path predicate test /$eq('a')/b/c:$gt(-1)",function(done) {
-		db.get("/$eq('a')/b/c:$gt(-1)").value().then(value => {
-			try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
-			done();
-		});
+		db.get("/$eq('a')/b/c:$gt(-1)")
+			.value()
+			.then(value => {
+					try { _chai.expect(value).equal(0); } catch(e) { done(e); return; }
+					done();
+				});
 	});
 	it("direct object value",function(done) {
 		db.get("/a/b/c/d").value({count:1}).then(value => {
@@ -179,20 +187,27 @@ describe("basic",function() {
 		});
 	});
 	it("on value no change",function(done) {
-		db.get("onvalue").forEach(async node => {
-			await node.put(1);
-			await node.on({change:value => done(new Error("Un_chai.expected trigger firing"))});
-			await node.put(1);
-			done();
-		});
+		db.get("onvalue")
+			.forEach(async node => {
+				await node.put(1);
+				await node.on({change:value => done(new Error("Un_chai.expected trigger firing"))});
+				await node.put(1);
+				done();
+			});
 	});
 	it("on value get",function(done) {
 		db.get("onvalue").forEach(async node => {
-			node.on({get:value => value + 1});
-			db.get("onvalue").value().then(value => {
-				try { _chai.expect(value).equal(2); } catch(e) { done(e); return; }
-				done();
+			await node.on({get:
+					value => {
+						return value + 1
+					}
 			});
+			db.get("onvalue")
+				.value()
+				.then(value => {
+					try { _chai.expect(value).equal(2); } catch(e) { done(e); return; }
+					done();
+				});
 		});
 	});
 });
@@ -215,75 +230,81 @@ describe("match atomic",function() {
 });
 describe("put merge",function() {
 	it("put",function(done) {
-		db.putItem({id:1,children:{2:true}}).then(object => {
-			_chai.expect(object.id).equal(1);
-			_chai.expect(object.children[2]).equal(true);
-			done();
-		})
+		db.putItem({id:1,children:{2:true}})
+			.then(object => {
+				_chai.expect(object.id).equal(1);
+				_chai.expect(object.children[2]).equal(true);
+				done();
+			})
 	}).timeout(3000);
 	it("match",function(done) {
 		let some = 0;
-		db.match({id:1,children:{2:true}}).forEach(object => { 
-			some++; 
-			_chai.expect(object.id).equal(1);
-			object.children["3"] = true;
-			object.children["2"] = false;
-			db.putItem(object).then(object => {
-				_chai.expect(object.children["3"]).equal(true);
-				_chai.expect(object.children["2"]).equal(false);
-				done();
-			})
-		}).then(() => some || done(new Error("Missing result"))).catch(e => done(e));
+		db.match({id:1,children:{2:true}})
+			.forEach(object => { 
+				some++; 
+				_chai.expect(object.id).equal(1);
+				object.children["3"] = true;
+				object.children["2"] = false;
+				db.putItem(object).then(object => {
+					_chai.expect(object.children["3"]).equal(true);
+					_chai.expect(object.children["2"]).equal(false);
+					done();
+				})
+			}).then(() => some || done(new Error("Missing result"))).catch(e => done(e));
 	}).timeout(3000);
 });
 describe("arbitration",function() {
 	it("ignore past",function(done) {
-		db.match({id:1}).forEach(object => {
-			object.id=2;
-			//object._ = Object.assign({},object._);
-			//object._.modifiedAt = new Date(Date.now()-500);
-			const metadata = Object.assign({},object._);
-			object = Object.assign({},object);
-			object.id=2;
-			object["#"] = metadata["#"];
-			object._ = metadata;
-			object._.modifiedAt = new Date(object._.modifiedAt.getTime()-1);
-			db.putItem(object).then(object => {
-				_chai.expect(object).equal(undefined);
-				done();
+		db.match({id:1})
+			.forEach(object => {
+				object.id=2;
+				//object._ = Object.assign({},object._);
+				//object._.modifiedAt = new Date(Date.now()-500);
+				const metadata = Object.assign({},object._);
+				object = Object.assign({},object);
+				object.id=2;
+				object["#"] = metadata["#"];
+				object._ = metadata;
+				object._.modifiedAt = new Date(object._.modifiedAt.getTime()-1);
+				db.putItem(object).then(object => {
+					_chai.expect(object).equal(undefined);
+					done();
+				}).catch(e => done(e))
 			}).catch(e => done(e))
-		}).catch(e => done(e))
 	});
 	it("merge more recent",function(done) {
-		db.match({id:1}).forEach(object => {
-			object.id=2;
-			object._.modifiedAt = new Date(object._.modifiedAt.getTime()+1);
-			let some = 0;
-			db.putItem(object).then(object => {
-				_chai.expect(object.id).equal(2);
-				done()
+		db.match({id:1})
+			.forEach(object => {
+				object.id=2;
+				object._.modifiedAt = new Date(object._.modifiedAt.getTime()+1);
+				let some = 0;
+				db.putItem(object).then(object => {
+					_chai.expect(object.id).equal(2);
+					done()
+				}).catch(e => done(e))
 			}).catch(e => done(e))
-		}).catch(e => done(e))
 	}).timeout(5000);
 	it("created latest",function(done) {
-		db.match({id:2}).forEach(object => {
-			object.id=3;
-			object._.createdAt = new Date(object._.createdAt.getTime()+10);
-			db.putItem(object).then(object => {
-				_chai.expect(object.id).equal(3);
-				done();
+		db.match({id:2})
+			.forEach(object => {
+				object.id=3;
+				object._.createdAt = new Date(object._.createdAt.getTime()+10);
+				db.putItem(object).then(object => {
+					_chai.expect(object.id).equal(3);
+					done();
+				}).catch(e => done(e))
 			}).catch(e => done(e))
-		}).catch(e => done(e))
 	}).timeout(5000);
 	it("lexically less",function(done) {
-		db.match({id:3}).forEach(object => {
-			object.id=4;
-			object._["#"] = object._["#"].substring(0,object._["#"].length-1);
-			db.putItem(object).then(object => {
-				_chai.expect(object.id).equal(4);
-				done();
+		db.match({id:3})
+			.forEach(object => {
+				object.id=4;
+				object._["#"] = object._["#"].substring(0,object._["#"].length-1);
+				db.putItem(object).then(object => {
+					_chai.expect(object.id).equal(4);
+					done();
+				}).catch(e => done(e))
 			}).catch(e => done(e))
-		}).catch(e => done(e))
 	});
 	it("schedule future",function(done) {
 		db.match({id:4}).forEach(object => {
@@ -347,10 +368,23 @@ describe("matching", function() {
 							done();
 						})
 				}).timeout(10000);
+				it("wild card key",function(done) {
+					let some = 0;
+					db.match({$_:{$eq: "joe"}})
+					.forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
+					.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+				});
+				it("RegExp key",function(done) {
+					let some = 0;
+					db.match({[/.*name/]:{$eq: "joe"}})
+					.forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
+					.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+				});
 				it("partial",function(done) {
 					let some = 0;
-					db.match({name:"joe"},{partial:true}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(Object.keys(object).length).equal(1);})
-							.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+					db.match({name:"joe"},{partial:true})
+						.forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(Object.keys(object).length).equal(1);})
+						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
 				});
 				it("double property",function(done) {
 					let some = 0;
@@ -561,6 +595,52 @@ describe("matching", function() {
 					db.match({notes:{$search:"lover lives"}}).forEach(object => { some++; _chai.expect(object.notes.indexOf("loves")>=0).equal(true); })
 					.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
 				});
+				it("$as",function(done) {
+					let some = 0;
+					db.match({name:{$typeof:"string",$as:"Name"}})
+						.forEach(object => { 
+							some++;
+							_chai.expect(typeof(object.Name)).equal("string");
+							})
+						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+				});
+				it("$compute",function(done) {
+					let some = 0;
+					db.match({name:{$typeof:"string"},computed:{$compute: function() { return this.name}}})
+						.forEach(object => { 
+							some++;
+							_chai.expect(object.computed).equal(object.name);
+							})
+						.then(() => some ? done() : done(new Error("Missing result")))
+						.catch(e => done(e));
+				});
+				it("$default",function(done) {
+					let some = 0;
+					db.match({name:{$typeof:"string"},dummy:{$default: "dummy"}})
+						.forEach(object => { 
+							some++;
+							_chai.expect(typeof(object.name)).equal("string");
+							_chai.expect(object.dummy).equal("dummy");
+							})
+						.then(() => some ? done() : done(new Error("Missing result")))
+						.catch(e => done(e));
+				});
+				it("$valid pass",function(done) {
+					let some = 0;
+					db.match({name:{$typeof:"string",$valid:{$typeof: "string"}}})
+						.forEach(object => { 
+							some++;
+							_chai.expect(typeof(object.name)).equal("string");
+							})
+						.then(() => some ? done() : done(new Error("Missing result")))
+						.catch(e => done(e));
+				});
+				it("$valid fail",function(done) {
+					db.match({name:{$typeof:"string",$valid:{$typeof: "number"}}})
+						.some(() => true)
+						.then(() => done(new Error("unexpected success")))
+						.catch(e => done());
+				});
 				for(const key of ["date","day","fullYear","hours","milliseconds","minutes","month","seconds","time","UTCDate","UTCDay","UTCFullYear","UTCHours","UTCSeconds","UTCMilliseconds","UTCMinutes","UTCMonth","year"]) {
 					const fname = `get${key[0].toUpperCase()}${key.substring(1)}`;
 					it("$" + key, Function("getChai",`return function(done) {
@@ -589,19 +669,22 @@ describe("matching", function() {
 				});
 				it("handle Infinity and NaN ",function(done) {
 					let some = 0;
-					db.match({favoriteNumbers:{$isArray:null}}).forEach(object => { 
-						some++; 
-						_chai.expect(object.favoriteNumbers[2]).equal(Infinity);
-						_chai.expect(typeof(object.favoriteNumbers[3])).equal("number");
-						_chai.expect(isNaN(object.favoriteNumbers[3])).equal(true);
-						})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+					db.match({favoriteNumbers:{$isArray:null}})
+						.forEach(object => { 
+							some++; 
+							_chai.expect(object.favoriteNumbers[2]).equal(Infinity);
+							_chai.expect(typeof(object.favoriteNumbers[3])).equal("number");
+							_chai.expect(isNaN(object.favoriteNumbers[3])).equal(true);
+							})
+							.then(() => some ? done() : done(new Error("Missing result")))
+							.catch(e => done(e));
 				});
 				it("match nested",function(done) {
 					let some = 0;
-					db.match({address:{city:"seattle"}}).forEach(object => { some++; _chai.expect(object.address.city).equal("seattle")})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
+					db.match({address:{city:"seattle"}})
+						.forEach(object => { some++; _chai.expect(object.address.city).equal("seattle")})
+							.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+					});
 				it("join",function(done) {
 					let some = 0;
 					db.join({name:{$neq:null}},{name:{$neq:null}},([o1,o2]) => o1.name===o2.name).forEach(record => { some++; _chai.expect(record.length).equal(2); _chai.expect(record[0].name).equal(record[1].name); })
@@ -609,9 +692,10 @@ describe("matching", function() {
 				});
 				it("find",async function() {
 					try {
-						const object = await db.match({address:{city:"seattle"}}).find(object => object.address.city==="seattle");
-						_chai.expect(object.address.city).equal("seattle");
-					} catch(e) { return e; }
+						const object = await db.match({address:{city:"seattle"}})
+							.find(object => object.address.city==="seattle");
+							_chai.expect(object.address.city).equal("seattle");
+						} catch(e) { return e; }
 				});
 				it("findIndex",async function() {
 					try {
@@ -897,7 +981,7 @@ describe("sql-like syntax",function() {
 	});
 });
 
-			function initDB({name,storage,promisify=false,workerArgumentList,workerInstanceVariable,workerName,peers}={}) {
+			function initDB({name,storage,promisify=false,workerArgumentList,workerInstanceVariable,workerName,peers,cache}={}) {
 				return db = ReasonDB.db({
 					name,
 					clear: true,
@@ -912,6 +996,7 @@ describe("sql-like syntax",function() {
 					workerInstanceVariable,
 					workerArgumentList,
 					workerName,
+					cache,
 					schema: {
 						Object: {
 							ctor: Object,
@@ -987,7 +1072,7 @@ describe("sql-like syntax",function() {
 				let storage;
 				before(() => {
 					//initDB({storage:ReasonDB.db.memoryStorage});
-					chai.db = initDB({storage:window.localStorage}); ////peers:{"http://localhost:8081/data":{}}
+					chai.db = initDB({storage:window.localStorage,cache:true}); ////peers:{"http://localhost:8081/data":{}}
 					chai.TESTDATE = new Date();
 					_chai = chai;
 					//storage = new SWDB("testdb","http://localhost:8080");storage.onready=()=>initDB({storage}); //,peers:{"http://localhost:8080/data":{}}
