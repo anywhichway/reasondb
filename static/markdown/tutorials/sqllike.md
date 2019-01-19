@@ -1,17 +1,18 @@
 `ReasonDB` supports a set of commands that use a SQL like naming convention and processing approach. These include `delete`; `insert`;`select` with aliasing, projections, computed columns, where clauses, joins, groupBy, and orderBy, and `update`.
 
-Each command is available on the ReasonDB instance of your application and after it has been created can be invoked with the `exec()` command which returns either a regular promise, or in the case of `select` a [cursor](/#/reasondb/tutorials/cursors).
+Each statement initiator is available on the `ReasonDB` instance of your application. Once a terminating clause os a statement is called a Promise is returned. Or, in the case of `select` a [cursor](/#/reasondb/tutorials/cursors) and once the cursor completes processing a Promise.
 
-The current version of ReasonDB is schemaless and you just use regular classes in place of tables. If you don't want to use custom classes, just use `Object`.
+The current version of ReasonDB is schemaless and you just use regular classes constructors in place of tables. If you don't want to use custom classes, just use `Object`.
 
-The `where` clauses associated with `delete`, `select`, and `update` use [JOQULAR](/#/reasondb/tutorials/joqular)  for pattern matching.
+The `where` clauses associated with `delete`, `select`, and `update` use [JOQULAR](/#/reasondb/tutorials/joqular) for pattern matching.
+
+A series of examples are provided below and further details on the specifics of each command are provides below. Also see the  [API documentation](/#/reasondb/api/sqllike) .
 
 ## delete
 
 ```javascript
 // delete all Persons
 db.delete().from(Person)
-	exec()
 	.then((count) => ... do something ... });
 ```
 
@@ -19,7 +20,6 @@ db.delete().from(Person)
 // delete all Persons with age 58
 db.delete().from(Person)
 	.where({age:{$eq:58}})
-	exec()
 	.then((count) => ... do something ... });
 ```
 
@@ -28,7 +28,6 @@ db.delete().from(Person)
 ```javascript
 db.insert({name:"juliana",age:58},{name:joe,age:56})
 	.into(Person)
-	.exec()
 	.then((count) => ... do something ...});
 ```
 
@@ -39,7 +38,6 @@ Before using `select` ensure you understand [cursors](/#/reasondb/tutorials/curs
 ```javascript
 db.select()
 	.from(Person)
-	.exec() 
 	.forEach({person} => ... do something ...)
 	.then((count) => ... do something ...});
 ```
@@ -48,7 +46,6 @@ db.select()
 db.select()
 	.from(Person)
 	.where({Person:{name:"juliana",age:{$eq:58}}})
-	.exec() 
 	.forEach({person} => ... do something ...)
 	.then((count) => ... do something ...});
 ```
@@ -56,8 +53,7 @@ db.select()
 ```javascript
 db.select()
 	.from({p:Person})
-	.where({p:{name:"juliana",age:{$eq:58}}})
-	.exec() 
+	.where({p:{name:"juliana",age:{$eq:58}}}) 
 	.forEach({person} => ... do something ...)
 	.then((count) => ... do something ...});
 ```
@@ -74,7 +70,6 @@ db.select({p:
 		runningAvgAge:{$: {avg:"age",running:true}} // running avg at the point found in cursor processing
 	})
 	.from({p:Person})
-	.exec() 
 	.forEach({person} => ... do something ...)
 	.then((count) => ... do something ...});
 ```
@@ -102,17 +97,14 @@ db.select()
 	.join({p2:db.select().from(Person)})
 	.on(({p1,p2}) => p1.name==="juliana" && p1.name===p2.name ? {p1,p2} : false)
 	.every(({p1,p2}) => p1.name===p2.name && p1.name==="juliana")
-	.exec()
 	.then(() => .. do something ...);
 ```
 
 ```javascript
  db.select()
  	.from({p1:Person})
- 	.natural()	
- 	.join({p2:db.select().from(Person)})
+ 	.natural({p2:db.select().from(Person)})
 	.some(({p1,p2}) => ... test something ...)
-	.exec()
 	.then(() => .. do something ...);
 ```
 
@@ -120,7 +112,6 @@ db.select()
 db.select()
 	.from({p1:Person})
 	.cross(db.select().from({p2:Person}))
-	.exec()
 	.forEach({p1,p2} => ... do something ...)
 	.then((count) => ... do something ...);
 ```
@@ -130,7 +121,6 @@ db.select().from(Person)
 	.join(db.select().from(Person))
 	.on((left,right) => left.name==="juliana" ? {left,right} : false);
 	.every(item => ... test something ...)
-	.exec()
 	.then(() => .. do something ...);
 ```
 
@@ -140,7 +130,6 @@ db.select()
 	.join(db.select()	.from(Person))
 	.on((left,right) => right.name==="juliana" ? {left,right} : false)
 	.every(item => ... test something ...)
-	.exec()
 	.then(() => .. do something ...);
 ```
 
@@ -150,7 +139,6 @@ db.select()
 	.join(db.select()	.from(Person))
 	.on((left,right) => {left,right})
 	.some(item => ... test something ...)
-	.exec()
 	.forEach(item => ... do something ...);
 ```
 
@@ -158,7 +146,6 @@ db.select()
 db.update(Person)
 	.set({age:60))
 	.where({name:59)
-	.exec()
 	.then((count) => ... do something ... });
 					
 					

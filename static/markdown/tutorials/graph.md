@@ -35,7 +35,7 @@ db.get("person/(id) => id.length <=3/age")
 	.forEach(age => console.log(await age.value()));
 ```
 
-The path expression above is testing the path component and returning all edges with id lengths les than 3 to a cursor, if you want to test the value, then use a colon. The code for each of the below will return `undefined` unless the value stored on `a/b` is "Value at b".
+The path expression above is testing the path component and returning all edges with id lengths less than 3 to a cursor, if you want to test the value, then use a colon. The code for each of the below will return `undefined` unless the value stored on `a/b` is "Value at b".
 
 ```javascript
 const bvalue = await db.get("a/b:(value) => value === "Value at b").value();
@@ -47,7 +47,7 @@ const bvalue = await db.get("a/b:$eq("Value at b)").value();
 
 ## Deleting Data
 
-To delete data, just access the edge and call `.delete()`.
+To delete data, just access the edge and call `.delete()`. Note, this deletes the value on the path, not the path itself.
 
 ```javascript
 await db.get("person/joe").value("Joe is cool");

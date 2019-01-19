@@ -20,6 +20,26 @@ import {ReasonDB} from "../index.js";
 const db = ReasonDB.db({storage:localStorage});
 ```
 
+You can now add data using the [key/value](/#/reasondb/tutorials/indexedKeyValue), [graph](/#/reasondb/tutorials/graph), or [SQL like](/#/reasondb/tutorials/SQLlike) API.
+
+```javascript
+db.setItem("counter",1);
+```
+
+or
+
+```javascript
+db.get("counter").value(1);
+```
+
+or
+
+```javascript
+db.insert({counter: 1}).into(Object);
+```
+
+
+
 <a name="custom">&nbsp;</a>
 
 ## Configuring A Custom Store
