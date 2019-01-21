@@ -324,420 +324,548 @@ describe("arbitration",function() {
 	}).timeout(6000);
 });
 describe("matching", function() {
-			describe("match",function() {
-				xit("overhead ##", function(done) { done(); });
-				it("secure",function(done) {
-					Promise.all([
-						db.get("Object/secret").on({get:value => "****"}),
-						db.get("Object/protected").secure({},{"#":"user1"}),
-						db.get("Object/hide").secure({write:true},{"#":"user1"}),
-						db.get("Object/read").secure({read:true},{"#":"user1"}),
-						db.get("Object/readwrite").secure({write:true},{"#":"user2"}),
-						db.get("Object/age").secure({read:true,write:true},"*").then(edge => db.get("Object/age").secure({write:true},{"#":"user2"}))
-					]).then(() => done())
-				});
-				it("putItem promised",function(done) {
-					let some = 0;
-					db.putItem({
-						name:"mary",
-						address:{city:"nyc"},
-						geopoint: new db.GeoPoint()
-						})
-						.then(object => { _chai.expect(typeof(object["#"])).equal("string"); done(); })
-						.catch(e => done(e));
-				}).timeout(15000);
-				it("put nested item",function(done) {
-					db.putItem({
-						birthday: _chai.TESTDATE,
-						name:"joe",
-						age:27,
-						size:10,
-						secret:24,
-						hide: "hide",
-						read: "read",
-						readwrite: "readwrite",
-						ssn:"555-55-5555",
-						ip:"127.0.0.1",
-						email: "joe@somewhere.com",
-						address:{city:"seattle",zipcode:{base:98101,plus4:1}},
-						notes: "loves how he lives",
-						favoriteNumbers:[7,15,Infinity,NaN]})
-						.then(value => o1 = value).then(object => {
-							_chai.expect(object.name).equal("joe"); 
-							_chai.expect(object.age).equal(27);
-							done();
-						})
-				}).timeout(10000);
-				it("wild card key",function(done) {
-					let some = 0;
-					db.match({$_:{$eq: "joe"}})
-					.forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
+	describe("match",function() {
+		xit("overhead ##", function(done) { done(); });
+		it("secure",function(done) {
+			Promise.all([
+				db.get("Object/secret").on({get:value => "****"}),
+				db.get("Object/protected").secure({},{"#":"user1"}),
+				db.get("Object/hide").secure({write:true},{"#":"user1"}),
+				db.get("Object/read").secure({read:true},{"#":"user1"}),
+				db.get("Object/readwrite").secure({write:true},{"#":"user2"}),
+				db.get("Object/age").secure({read:true,write:true},"*").then(edge => db.get("Object/age").secure({write:true},{"#":"user2"}))
+			]).then(() => done())
+		});
+		it("putItem promised",function(done) {
+			let some = 0;
+			db.putItem({
+				name:"mary",
+				address:{city:"nyc"},
+				geopoint: new db.GeoPoint()
+				})
+				.then(object => { _chai.expect(typeof(object["#"])).equal("string"); done(); })
+				.catch(e => done(e));
+		}).timeout(15000);
+		it("put nested item",function(done) {
+			db.putItem({
+				birthday: _chai.TESTDATE,
+				name:"joe",
+				age:27,
+				size:10,
+				secret:24,
+				hide: "hide",
+				read: "read",
+				readwrite: "readwrite",
+				ssn:"555-55-5555",
+				ip:"127.0.0.1",
+				email: "joe@somewhere.com",
+				address:{city:"seattle",zipcode:{base:98101,plus4:1}},
+				notes: "loves how he lives",
+				favoriteNumbers:[7,15,Infinity,NaN]})
+				.then(value => o1 = value).then(object => {
+					_chai.expect(object.name).equal("joe"); 
+					_chai.expect(object.age).equal(27);
+					done();
+				})
+		}).timeout(10000);
+		it("wild card key",function(done) {
+			let some = 0;
+			db.match({$_:{$eq: "joe"}})
+			.forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
+			.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("RegExp key",function(done) {
+			let some = 0;
+			db.match({[/.*name/]:{$eq: "joe"}})
+			.forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
+			.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("partial",function(done) {
+			let some = 0;
+			db.match({name:"joe"},{partial:true})
+				.forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(Object.keys(object).length).equal(1);})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("double property",function(done) {
+			let some = 0;
+			db.match({name:"joe",age:27})
+				.forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("inline property",function(done) {
+			let some = 0;
+			db.match({[key => key==="age"]:{$lt:28}})
+				.forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("inline value true",function(done) {
+			let some = 0;
+			db.match({age:value => value < 28})
+				.forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("inline value false",function(done) {
+			let some = 0;
+			db.match({age:value => value < 27}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done(new Error("Un_chai.expected result")) :  done()).catch(e => done(e));
+		});
+		it("functional key",function(done) {
+			let some = 0;
+			db.match({[key => key==="name"]:{$typeof:"string"}})
+				.forEach(object => { some++; _chai.expect(typeof(object.name)).equal("string"); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$",function(done) {
+			let some = 0;
+			db.match({name:{$:value=>value==="joe"}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$lt",function(done) {
+			let some = 0;
+			db.match({age:{$lt:28}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$lte",function(done) {
+			let some = 0;
+			db.match({age:{$lte:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$eq",function(done) {
+			let some = 0;
+			db.match({age:{$eq:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$eq string",function(done) {
+			let some = 0;
+			db.match({age:{$eq:"27"}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$eeq",function(done) {
+			let some = 0;
+			db.match({age:{$eeq:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$neq string",function(done) {
+			let some = 0;
+			db.match({age:{$neq:"5"}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$neeq",function(done) {
+			let some = 0;
+			db.match({age:{$neeq:5}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$eeq string",function(done) {
+			let some = 0;
+			db.match({age:{$eeq:"27"}}).forEach(object => { some++; })
+				.then(() => some ? done(new Error("Extra result")) : done()).catch(e => done(e))
+		});
+		it("$between",function(done) {
+			let some = 0;
+			db.match({age:{$between:[26,28]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$between inclusive",function(done) {
+			let some = 0;
+			db.match({age:{$between:[27,28,true]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$outside higher",function(done) {
+			let some = 0;
+			db.match({age:{$outside:[25,26]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$outside lower",function(done) {
+			let some = 0;
+			db.match({age:{$outside:[28,29]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$gte",function(done) {
+			let some = 0;
+			db.match({age:{$gte:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$gt",function(done) {
+			let some = 0;
+			db.match({age:{$gt:26}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$echoes",function(done) {
+			let some = 0;
+			db.match({name:{$echoes:"jo"}}).forEach(object => { some++; _chai.expect(object.name).equal("joe");})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$instanceof by string",function(done) {
+			let some = 0;
+			db.match({favoriteNumbers:{$instanceof:"Array"}}).forEach(object => { 
+				some++; 
+				_chai.expect(object.favoriteNumbers.length).equal(4);
+				})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$instanceof by constructor",function(done) {
+			let some = 0;
+			db.match({favoriteNumbers:{$instanceof:Array}}).forEach(object => { 
+				some++; 
+				_chai.expect(object.favoriteNumbers.length).equal(4);
+				})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$isArray",function(done) {
+			let some = 0;
+			db.match({favoriteNumbers:{$isArray:null}}).forEach(object => { 
+				some++; 
+				_chai.expect(object.favoriteNumbers.length).equal(4);
+				})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$isEmail",function(done) {
+			let some = 0;
+			db.match({email:{$isEmail:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.email).equal("joe@somewhere.com");})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$isEven",function(done) {
+			let some = 0;
+			db.match({size:{$isEven:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.size).equal(10);})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$isIPAddress",function(done) {
+			let some = 0;
+			db.match({ip:{$isIPAddress:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.ip).equal("127.0.0.1");})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$isOdd",function(done) {
+			let some = 0;
+			db.match({age:{$isOdd:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$isSSN",function(done) {
+			let some = 0;
+			db.match({ssn:{$isSSN:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$in",function(done) {
+			let some = 0;
+			db.match({name:{$in:["joe"]}}).forEach(object => { some++; _chai.expect(object.name).equal("joe");})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$instanceof",function(done) {
+			let some = 0;
+			db.match({address:{$instanceof:Object}}).forEach(object => { some++; _chai.expect(object.address instanceof Object).equal(true)})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$instanceof cname",function(done) {
+			let some = 0;
+			db.match({address:{$instanceof:"Object"}}).forEach(object => { some++; _chai.expect(object.address instanceof Object).equal(true)})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$matches",function(done) {
+			let some = 0;
+			db.match({name:{$matches:["joe"]}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$nin",function(done) {
+			let some = 0;
+			db.match({name:{$nin:["mary"]}}).forEach(object => { some++; _chai.expect(object.name).equal("joe");})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$typeof",function(done) {
+			let some = 0;
+			db.match({name:{$typeof:"string"}}).forEach(object => { some++; _chai.expect(typeof(object.name)).equal("string");})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$and single",function(done) {
+			let some = 0;
+			db.match({age:{$and:{$lt:28,$gt:26}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$and nested",function(done) {
+			let some = 0;
+			db.match({age:{$and:{$lt:28,$and:{$gt:26}}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$and array",function(done) {
+			let some = 0;
+			db.match({age:{$and:[{$lt:28},{$gt:26}]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$or single",function(done) {
+			let some = 0;
+			db.match({age:{$or:{$eeq:28,$eq:27}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$or nested",function(done) {
+			let some = 0;
+			db.match({age:{$or:{$eeq:28,$or:{$eeq:27}}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$or array",function(done) {
+			let some = 0;
+			db.match({age:{$or:[{$eeq:28},{$eeq:27}]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$xor",function(done) {
+			let some = 0;
+			db.match({age:{$xor:{$eeq:28,$eq:27}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$not",function(done) {
+			let some = 0;
+			db.match({age:{$not:{$eeq:28}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$not $xor",function(done) {
+			let some = 0;
+			db.match({age:{$not:{$xor:{$eeq:27,$eq:27}}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("$search", function(done) {
+			let some = 0;
+			db.match({notes:{$search:"lover lives"}}).forEach(object => { some++; _chai.expect(object.notes.indexOf("loves")>=0).equal(true); })
+			.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		for(const key of ["date","day","fullYear","hours","milliseconds","minutes","month","seconds","time","UTCDate","UTCDay","UTCFullYear","UTCHours","UTCSeconds","UTCMilliseconds","UTCMinutes","UTCMonth","year"]) {
+			const fname = `get${key[0].toUpperCase()}${key.substring(1)}`;
+			it("$" + key, Function("getChai",`return function(done) {
+				let some = 0;
+				getChai().db.match({birthday:{["$${key}"]:getChai().TESTDATE}}).forEach(object => { 
+					some++; 
+					//console.log(object);
+					getChai().expect(object.birthday["${fname}"]()).equal(getChai().TESTDATE["${fname}"]()); 
+				})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+			}`)(getChai));
+			it("$" + key + " from time", Function("getChai",`return function(done) {
+				let some = 0;
+				//debugger;
+				getChai().db.match({birthday:{time:{["$${key}"]:getChai().TESTDATE}}}).forEach(object => { 
+					some++; 
+					getChai().expect(object.birthday["${fname}"]()).equal(getChai().TESTDATE["${fname}"]()); 
+				})
+				.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+			}`)(getChai));
+		}
+		it("secret", function(done) {
+			let some = 0;
+			db.match({name:"joe"}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.secret).equal("****");})
 					.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("RegExp key",function(done) {
-					let some = 0;
-					db.match({[/.*name/]:{$eq: "joe"}})
-					.forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
+		});
+		it("handle Infinity and NaN ",function(done) {
+			let some = 0;
+			db.match({favoriteNumbers:{$isArray:null}})
+				.forEach(object => { 
+					some++; 
+					_chai.expect(object.favoriteNumbers[2]).equal(Infinity);
+					_chai.expect(typeof(object.favoriteNumbers[3])).equal("number");
+					_chai.expect(isNaN(object.favoriteNumbers[3])).equal(true);
+					})
+					.then(() => some ? done() : done(new Error("Missing result")))
+					.catch(e => done(e));
+		});
+		it("match nested",function(done) {
+			let some = 0;
+			db.match({address:{city:"seattle"}})
+				.forEach(object => { some++; _chai.expect(object.address.city).equal("seattle")})
 					.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("partial",function(done) {
-					let some = 0;
-					db.match({name:"joe"},{partial:true})
-						.forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(Object.keys(object).length).equal(1);})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("double property",function(done) {
-					let some = 0;
-					db.match({name:"joe",age:27}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("inline property",function(done) {
-					let some = 0;
-					db.match({[key => key==="age"]:{$lt:28}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("inline value true",function(done) {
-					let some = 0;
-					db.match({age:value => value < 28}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("inline value false",function(done) {
-					let some = 0;
-					db.match({age:value => value < 27}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done(new Error("Un_chai.expected result")) :  done()).catch(e => done(e));
-				});
-				it("$",function(done) {
-					let some = 0;
-					db.match({name:{$:value=>value==="joe"}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$lt",function(done) {
-					let some = 0;
-					db.match({age:{$lt:28}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$lte",function(done) {
-					let some = 0;
-					db.match({age:{$lte:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$eq",function(done) {
-					let some = 0;
-					db.match({age:{$eq:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$eq string",function(done) {
-					let some = 0;
-					db.match({age:{$eq:"27"}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$eeq",function(done) {
-					let some = 0;
-					db.match({age:{$eeq:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$neq string",function(done) {
-					let some = 0;
-					db.match({age:{$neq:"5"}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$neeq",function(done) {
-					let some = 0;
-					db.match({age:{$neeq:5}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$eeq string",function(done) {
-					let some = 0;
-					db.match({age:{$eeq:"27"}}).forEach(object => { some++; })
+			});
+		it("join",function(done) {
+			let some = 0;
+			db.join({name:{$neq:null}},{name:{$neq:null}},([o1,o2]) => o1.name===o2.name).forEach(record => { some++; _chai.expect(record.length).equal(2); _chai.expect(record[0].name).equal(record[1].name); })
+			.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+		});
+		it("find",async function() {
+			try {
+				const object = await db.match({address:{city:"seattle"}})
+					.find(object => object.address.city==="seattle");
+					_chai.expect(object.address.city).equal("seattle");
+				} catch(e) { return e; }
+		});
+		it("findIndex",async function() {
+			try {
+				const i = await db.match({address:{city:"seattle"}}).findIndex(object => object.address.city==="seattle");
+				_chai.expect(i).equal(0);
+			} catch(e) { return e; }
+		});
+		it("findIndex not",async function() {
+			try {
+				const i = await db.match({address:{city:{$neq:null}}}).findIndex(object => object.address.city==="miami");
+				_chai.expect(i).equal(-1);
+			} catch(e) { return e; }
+		});
+		it("slice",function(done) {
+			let some = 0;
+			db.match({address:{city:"seattle"}}).slice().forEach(object => { 
+				some++; _chai.expect(object.address.city).equal("seattle")
+			})
+			.then(() => {
+				some ? done() : done(new Error("Missing result"));
+			}).catch(e => done(e));
+		});
+		it("withMemory",function(done) {
+			db.match({id:{$gt:0}}).withMemory().resolved[1].then(value => {
+				_chai.expect(value.id).to.be.greaterThan(0);
+				done();
+			})
+		});
+		it("withMemory seek",function(done) {
+			db.match({id:{$gt:0}}).withMemory({seek:true})[1].then(value => {
+				_chai.expect(value.id).to.be.greaterThan(0);
+				done();
+			})
+		});
+		it("delete",function(done) {
+			db.removeItem(o1).then(() => {
+				let some = 0;
+				db.match({name:"joe"}).forEach(object => { some++;})
 						.then(() => some ? done(new Error("Extra result")) : done()).catch(e => done(e))
-				});
-				it("$between",function(done) {
-					let some = 0;
-					db.match({age:{$between:[26,28]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$between inclusive",function(done) {
-					let some = 0;
-					db.match({age:{$between:[27,28,true]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$outside higher",function(done) {
-					let some = 0;
-					db.match({age:{$outside:[25,26]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$outside lower",function(done) {
-					let some = 0;
-					db.match({age:{$outside:[28,29]}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$gte",function(done) {
-					let some = 0;
-					db.match({age:{$gte:27}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$gt",function(done) {
-					let some = 0;
-					db.match({age:{$gt:26}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$echoes",function(done) {
-					let some = 0;
-					db.match({name:{$echoes:"jo"}}).forEach(object => { some++; _chai.expect(object.name).equal("joe");})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$instanceof by string",function(done) {
-					let some = 0;
-					db.match({favoriteNumbers:{$instanceof:"Array"}}).forEach(object => { 
-						some++; 
-						_chai.expect(object.favoriteNumbers.length).equal(4);
-						})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$instanceof by constructor",function(done) {
-					let some = 0;
-					db.match({favoriteNumbers:{$instanceof:Array}}).forEach(object => { 
-						some++; 
-						_chai.expect(object.favoriteNumbers.length).equal(4);
-						})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$isArray",function(done) {
-					let some = 0;
-					db.match({favoriteNumbers:{$isArray:null}}).forEach(object => { 
-						some++; 
-						_chai.expect(object.favoriteNumbers.length).equal(4);
-						})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$isEmail",function(done) {
-					let some = 0;
-					db.match({email:{$isEmail:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.email).equal("joe@somewhere.com");})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$isEven",function(done) {
-					let some = 0;
-					db.match({size:{$isEven:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.size).equal(10);})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$isIPAddress",function(done) {
-					let some = 0;
-					db.match({ip:{$isIPAddress:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.ip).equal("127.0.0.1");})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$isOdd",function(done) {
-					let some = 0;
-					db.match({age:{$isOdd:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$isSSN",function(done) {
-					let some = 0;
-					db.match({ssn:{$isSSN:null}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$in",function(done) {
-					let some = 0;
-					db.match({name:{$in:["joe"]}}).forEach(object => { some++; _chai.expect(object.name).equal("joe");})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$instanceof",function(done) {
-					let some = 0;
-					db.match({address:{$instanceof:Object}}).forEach(object => { some++; _chai.expect(object.address instanceof Object).equal(true)})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$instanceof cname",function(done) {
-					let some = 0;
-					db.match({address:{$instanceof:"Object"}}).forEach(object => { some++; _chai.expect(object.address instanceof Object).equal(true)})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$matches",function(done) {
-					let some = 0;
-					db.match({name:{$matches:["joe"]}}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.age).equal(27);})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$nin",function(done) {
-					let some = 0;
-					db.match({name:{$nin:["mary"]}}).forEach(object => { some++; _chai.expect(object.name).equal("joe");})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$typeof",function(done) {
-					let some = 0;
-					db.match({name:{$typeof:"string"}}).forEach(object => { some++; _chai.expect(typeof(object.name)).equal("string");})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$and",function(done) {
-					let some = 0;
-					db.match({age:{$and:{$lt:28,$gt:26}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$or",function(done) {
-					let some = 0;
-					db.match({age:{$or:{$eeq:28,$eeq:27}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$xor",function(done) {
-					let some = 0;
-					db.match({age:{$xor:{$eeq:28,$eq:27}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$not",function(done) {
-					let some = 0;
-					db.match({age:{$not:{$eeq:28}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$not $xor",function(done) {
-					let some = 0;
-					db.match({age:{$not:{$xor:{$eeq:27,$eq:27}}}}).forEach(object => { some++; _chai.expect(object.age).equal(27); })
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$search", function(done) {
-					let some = 0;
-					db.match({notes:{$search:"lover lives"}}).forEach(object => { some++; _chai.expect(object.notes.indexOf("loves")>=0).equal(true); })
-					.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$as",function(done) {
-					let some = 0;
-					db.match({name:{$typeof:"string",$as:"Name"}})
-						.forEach(object => { 
-							some++;
-							_chai.expect(typeof(object.Name)).equal("string");
-							})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("$compute",function(done) {
-					let some = 0;
-					db.match({name:{$typeof:"string"},computed:{$compute: function() { return this.name}}})
-						.forEach(object => { 
-							some++;
-							_chai.expect(object.computed).equal(object.name);
-							})
-						.then(() => some ? done() : done(new Error("Missing result")))
-						.catch(e => done(e));
-				});
-				it("$default",function(done) {
-					let some = 0;
-					db.match({name:{$typeof:"string"},dummy:{$default: "dummy"}})
-						.forEach(object => { 
-							some++;
-							_chai.expect(typeof(object.name)).equal("string");
-							_chai.expect(object.dummy).equal("dummy");
-							})
-						.then(() => some ? done() : done(new Error("Missing result")))
-						.catch(e => done(e));
-				});
-				it("$valid pass",function(done) {
-					let some = 0;
-					db.match({name:{$typeof:"string",$valid:{$typeof: "string"}}})
-						.forEach(object => { 
-							some++;
-							_chai.expect(typeof(object.name)).equal("string");
-							})
-						.then(() => some ? done() : done(new Error("Missing result")))
-						.catch(e => done(e));
-				});
-				it("$valid fail",function(done) {
-					db.match({name:{$typeof:"string",$valid:{$typeof: "number"}}})
-						.some(() => true)
-						.then(() => done(new Error("unexpected success")))
-						.catch(e => done());
-				});
-				for(const key of ["date","day","fullYear","hours","milliseconds","minutes","month","seconds","time","UTCDate","UTCDay","UTCFullYear","UTCHours","UTCSeconds","UTCMilliseconds","UTCMinutes","UTCMonth","year"]) {
-					const fname = `get${key[0].toUpperCase()}${key.substring(1)}`;
-					it("$" + key, Function("getChai",`return function(done) {
-						let some = 0;
-						getChai().db.match({birthday:{["$${key}"]:getChai().TESTDATE}}).forEach(object => { 
-							some++; 
-							//console.log(object);
-							getChai().expect(object.birthday["${fname}"]()).equal(getChai().TESTDATE["${fname}"]()); 
-						})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-					}`)(getChai));
-					it("$" + key + " from time", Function("getChai",`return function(done) {
-						let some = 0;
-						//debugger;
-						getChai().db.match({birthday:{time:{["$${key}"]:getChai().TESTDATE}}}).forEach(object => { 
-							some++; 
-							getChai().expect(object.birthday["${fname}"]()).equal(getChai().TESTDATE["${fname}"]()); 
-						})
-						.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-					}`)(getChai));
-				}
-				it("secret", function(done) {
-					let some = 0;
-					db.match({name:"joe"}).forEach(object => { some++; _chai.expect(object.name).equal("joe"); _chai.expect(object.secret).equal("****");})
-							.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("handle Infinity and NaN ",function(done) {
-					let some = 0;
-					db.match({favoriteNumbers:{$isArray:null}})
-						.forEach(object => { 
-							some++; 
-							_chai.expect(object.favoriteNumbers[2]).equal(Infinity);
-							_chai.expect(typeof(object.favoriteNumbers[3])).equal("number");
-							_chai.expect(isNaN(object.favoriteNumbers[3])).equal(true);
-							})
-							.then(() => some ? done() : done(new Error("Missing result")))
-							.catch(e => done(e));
-				});
-				it("match nested",function(done) {
-					let some = 0;
-					db.match({address:{city:"seattle"}})
-						.forEach(object => { some++; _chai.expect(object.address.city).equal("seattle")})
-							.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-					});
-				it("join",function(done) {
-					let some = 0;
-					db.join({name:{$neq:null}},{name:{$neq:null}},([o1,o2]) => o1.name===o2.name).forEach(record => { some++; _chai.expect(record.length).equal(2); _chai.expect(record[0].name).equal(record[1].name); })
-					.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
-				});
-				it("find",async function() {
-					try {
-						const object = await db.match({address:{city:"seattle"}})
-							.find(object => object.address.city==="seattle");
-							_chai.expect(object.address.city).equal("seattle");
-						} catch(e) { return e; }
-				});
-				it("findIndex",async function() {
-					try {
-						const i = await db.match({address:{city:"seattle"}}).findIndex(object => object.address.city==="seattle");
-						_chai.expect(i).equal(0);
-					} catch(e) { return e; }
-				});
-				it("findIndex not",async function() {
-					try {
-						const i = await db.match({address:{city:{$neq:null}}}).findIndex(object => object.address.city==="miami");
-						_chai.expect(i).equal(-1);
-					} catch(e) { return e; }
-				});
-				it("slice",function(done) {
-					let some = 0;
-					db.match({address:{city:"seattle"}}).slice().forEach(object => { 
-						some++; _chai.expect(object.address.city).equal("seattle")
-					})
-					.then(() => {
-						some ? done() : done(new Error("Missing result"));
-					}).catch(e => done(e));
-				});
-				it("withMemory",function(done) {
-					db.match({id:{$gt:0}}).withMemory().resolved[1].then(value => {
-						_chai.expect(value.id).to.be.greaterThan(0);
-						done();
-					})
-				});
-				it("withMemory seek",function(done) {
-					db.match({id:{$gt:0}}).withMemory({seek:true})[1].then(value => {
-						_chai.expect(value.id).to.be.greaterThan(0);
-						done();
-					})
-				});
-				it("delete",function(done) {
-					db.removeItem(o1).then(() => {
-						let some = 0;
-						db.match({name:"joe"}).forEach(object => { some++;})
-								.then(() => some ? done(new Error("Extra result")) : done()).catch(e => done(e))
-					});
-				}).timeout(3000);
-			});	
+			});
+		}).timeout(3000);
+	});
+});
+describe("select projections", function() {
+	it("$as",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string",$as:"Name"}})
+			.forEach(object => { 
+				some++;
+				_chai.expect(typeof(object.Name)).equal("string");
+				})
+			.then(() => some ? done() : done(new Error("Missing result"))).catch(e => done(e));
+	});
+	it("$compute",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string"},computed:{$compute: function() { return this.name}}})
+			.forEach(object => { 
+				some++;
+				_chai.expect(object.computed).equal(object.name);
+				})
+			.then(() => some ? done() : done(new Error("Missing result")))
+			.catch(e => done(e));
+	});
+	it("$default",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string"},dummy:{$default: "dummy"}})
+			.forEach(object => { 
+				some++;
+				_chai.expect(typeof(object.name)).equal("string");
+				_chai.expect(object.dummy).equal("dummy");
+				})
+			.then(() => some ? done() : done(new Error("Missing result")))
+			.catch(e => done(e));
+	});
+});
+describe("validation", function() {
+	it("$valid pass",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string",$valid:{$typeof: "string"}}})
+			.forEach(object => { 
+				some++;
+				_chai.expect(typeof(object.name)).equal("string");
+				})
+			.then(() => some ? done() : done(new Error("Missing result")))
+			.catch(e => done(e));
+	});
+	it("$valid fail",function(done) {
+		db.match({name:{$typeof:"string",$valid:{$typeof: "number"}}})
+			.some(() => true)
+			.then(() => done(new Error("unexpected success")))
+			.catch(e => done());
+	});
+});
+describe("$freeze",function() {
+	it("primitive",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string",$freeze:true}})
+			.forEach(object => {
+				some++;
+				const {configurable,writable} = Object.getOwnPropertyDescriptor(object,"name");
+				_chai.expect(configurable).equal(false);
+				_chai.expect(writable).equal(false);
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	});
+	it("object and property",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string"},address:{$freeze:{}}})
+			.forEach(object => {
+				some++;
+				const {configurable,writable} = Object.getOwnPropertyDescriptor(object,"address");
+				_chai.expect(configurable).equal(false);
+				_chai.expect(configurable).equal(false);
+				_chai.expect(Object.isFrozen(object.address)).equal(true);
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	});
+	it("object and not property",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string"},address:{$freeze:{property:false}}})
+			.forEach(object => {
+				some++;
+				const {configurable,writable} = Object.getOwnPropertyDescriptor(object,"address");
+				_chai.expect(configurable).equal(true);
+				_chai.expect(configurable).equal(true);
+				_chai.expect(Object.isFrozen(object.address)).equal(true);
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	})
+});
+describe("$return",function() {
+	it("value",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string",$return:value=>value}})
+			.forEach(object => {
+				some++;
+				_chai.expect(typeof(object.name)).equal("string");
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	});
+	it("configured",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string",$return:{enumerable:false}}})
+			.forEach(object => {
+				some++;
+				const {enumerable,configurable} = Object.getOwnPropertyDescriptor(object,"name");
+				_chai.expect(enumerable).equal(false);
+				_chai.expect(configurable).equal(true);
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	});
+	it("configured $value",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string",$return:{$value:value=> 1}}})
+			.forEach(object => {
+				some++;
+				_chai.expect(object.name).equal(1);
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	});
+	it("configured value",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string",$return:{value:1}}})
+			.forEach(object => {
+				some++;
+				_chai.expect(object.name).equal(1);
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	});
+	it("nested",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string"},address:{$return:({city}) => city}})
+			.forEach(object => {
+				some++;
+				_chai.expect(typeof(object.address)).equal("string");
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	})
+	it("nested get",function(done) {
+		let some = 0;
+		db.match({name:{$typeof:"string"},address:{$return:{get:()=>1}}})
+			.forEach(object => {
+				some++;
+				_chai.expect(object.address).equal(1);
+			})
+			.then(() => some ? done() : done(new Error("Missing result")))
+	})
 });
 class Person {
 	constructor(config) {

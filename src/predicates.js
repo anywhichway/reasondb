@@ -14,22 +14,32 @@ export const predicates = {
 		return result;
 	},
 	$and(a,tests) {
-		const resolve = (a,pname,value) => predicates[pname](a,value),
-			pnames = Object.keys(tests);
-		return pnames.every(pname => resolve(a,pname,tests[pname]));
+		const resolve = (a,pname,value) => predicates[pname] ? predicates[pname](a,value) : false;
+		if(Array.isArray(tests)) return tests.every(test => Object.keys(test).every(pname => resolve(a,pname,test[pname])));
+		return Object.keys(tests).every(pname => resolve(a,pname,tests[pname]));
 	},
 	$or(a,tests) {
-		const resolve = (a,pname,value) => predicates[pname](a,value),
-			pnames = Object.keys(tests);
-		return pnames.some(pname => resolve(a,pname,tests[pname]));
+		const resolve = (a,pname,value) => predicates[pname] ? predicates[pname](a,value) : false;
+		if(Array.isArray(tests)) return tests.some(test => Object.keys(test).some(pname => resolve(a,pname,test[pname])));
+		return Object.keys(tests).some(pname => resolve(a,pname,tests[pname]));
 	},
 	$xor(a,tests) {
-		const resolve = (a,pname,value) => predicates[pname](a,value),
-			pnames = Object.keys(tests);
-		return pnames.reduce((accum,pname) => {
-			if(resolve(a,pname,tests[pname])) ++accum;
-			return accum;
-			},0)===1;
+		let found = 0;
+		const resolve = (a,pname,value) => predicates[pname] ? predicates[pname](a,value) : false;
+		if(Array.isArray(tests)) {
+			for(const test of tests) {
+				for(const pname in test) {
+					if(resolve(a,pname,test[pname])) found++;
+					if(found>1) return false;
+				}
+			}
+		} else {
+			for(const pname in tests) {
+				if(resolve(a,pname,tests[pname])) found++;
+				if(found>1) return false;
+			}
+		}
+		return found===1;
 	},
 	$not(a,tests) {
 		const resolve = (a,pname,value) => predicates[pname](a,value),
@@ -186,4 +196,10 @@ for(const key of ["date","day","fullYear","hours","milliseconds","minutes","mont
 																	if(typeof(a)==="number") { a = new Date(a); } if(typeof(b)==="number") { b = new Date(b); }; 
 	                                if(typeof(a)==="object" && a instanceof Date && typeof(b)==="object" && b instanceof Date) return a.${fname}()===b.${fname}(); }`)();
 }
+
+predicates.$text = predicates.$search;
+predicates.$type = predicates.$typeof;
+predicates.$ne = predicates.$neq;
+predicates.$where = predicates.$;
+
 	

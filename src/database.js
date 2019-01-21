@@ -1,8 +1,10 @@
 import {cartesianAsyncGenerator} from "./cartesianAsyncGenerator.js";
 
-import {ConstraintViolationError} from "./errors.js";
+import {ConstraintViolationError,JOQULARTypeError} from "./errors.js";
 
 import {deepEqual} from "./deepEqual.js";
+
+import {deepFreeze} from "./deepFreeze.js";
 
 import {Edge} from "./Edge.js";
 
@@ -127,13 +129,66 @@ const indexableDate = (date,full,object) => { // create a datelike object with e
 			}
 		});
 		Object.keys(object).forEach(key => {
-			if(resolvers[key] && typeof(resolvers[key])==="object") {
-				if(object[key] && typeof(object[key])==="object") {
-					object[key] = resolveFor(db,object[key],resolvers[key]);
+			const resolver = resolvers[key];
+			if(resolver && typeof(resolver)==="object") {
+				let value = object[key];
+				if(value && typeof(value)==="object") {
+					object[key] = resolveFor(db,value,resolver);
 				}
-				if(resolvers[key] && resolvers[key].$as) {
-					object[resolvers[key].$as] = object[key];
+				if(resolver.$as) {
+					object[resolver.$as] = value;
 					delete object[key];
+				}
+				if(resolver.$return!==undefined) {
+					const type = typeof(resolver.$return),
+						get = resolver.$return.get,
+						set = resolver.$return.writable!==false ? resolver.$return.set : () => {};
+					if(type==="function") {
+						object[key] = resolver.$return(value);
+					} else if(type==="object") {
+						const desc = Object.getOwnPropertyDescriptor(object,key);
+						if(resolver.$return.enumerable!==undefined) {
+							desc.enumerable = resolver.$return.enumerable;
+						}
+						if(resolver.$return.configurable!==undefined) {
+							desc.enumerable = resolver.$return.configurable;
+						}
+						if(get || set) {
+							desc.get = get;
+							desc.set = set;
+							delete desc.writable;
+							delete desc.value;
+						} else {
+							if(resolver.$return.value!==undefined) {
+								value = resolver.$return.value;
+							}
+							if(resolver.$return.$value!==undefined) {
+								value = resolver.$return.$value(value);
+							}
+							if(resolver.$return.writable!==undefined) {
+								desc.writable = resolver.$return.writable;
+							}
+							desc.value = value;
+						}
+						Object.defineProperty(object,key,desc);
+					} else {
+						object[key] = resolver.$return;
+					}
+				}
+				if(resolver.$freeze) {
+					if(object[key] && typeof(object[key])==="object" && typeof(resolver.$freeze)==="object") {
+						if(resolver.$freeze.deep) {
+							deepFreeze(object[key]);
+						} else {
+							Object.freeze(object[key]);
+						}
+					}
+					if(resolver.$freeze.property!==false) {
+						const desc = Object.getOwnPropertyDescriptor(object,key);
+						if(!desc.get && !desc.set) desc.writable = false;
+						desc.configurable = false;
+						Object.defineProperty(object,key,desc);
+					}
 				}
 			}
 		})
@@ -561,7 +616,7 @@ export class Database {
 			}
 		} else if(pathOrObject && type==="object") {
 			//console.log(pathOrObject)
-			const resolvers = removeKeys(pathOrObject,["$as","$compute","$default","$valid"]);
+			const resolvers = removeKeys(pathOrObject,["$as","$compute","$default","$valid","$return","$freeze"]);
 			for await(const id of this.matchObjects(pathOrObject,ctor)) {
 				//console.log(id)
 				const object = await this.getObject(id,{partial:partial ? pathOrObject : null,read});

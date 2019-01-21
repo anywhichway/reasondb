@@ -1,6 +1,6 @@
 {
 	"name": "reasondb",
-	"version": "1.0.4b",
+	"version": "1.0.5b",
 	"description": "A JavaScript schema optional extensible key-value backed datastore supporting element level security, triggers, query pipelines, graphs, objects, documents, and joins.",
 	"private": false,
 	"isomorphic": true,

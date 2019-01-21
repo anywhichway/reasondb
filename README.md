@@ -22,6 +22,8 @@ Full documentation is available at https://anywhichway.github.io/reasondb
 
 ## Updates (reverse chronological order)
 
+2019-01-21 v1.0.5b Enhanced JOQULAR to support $return.
+
 2019-01-19 v1.0.4b Corrected years in this update list. Enhanced JOQULAR to support projections and validation.
 
 2019-01-13 v1.0.3b Basic replication now working.
