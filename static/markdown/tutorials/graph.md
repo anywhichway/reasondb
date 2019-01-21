@@ -147,7 +147,7 @@ Triggers are automatically persisted and so long as they do not contain closure 
 
 2) Ensure you start your database with the option `saveTriggers` set to false.
 
-<a name="indexing>&nbsp;</a>
+<a name="indexing">&nbsp;</a>
 
 ## Automatically Graphing Objects For Indexing
 

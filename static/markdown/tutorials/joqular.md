@@ -1,4 +1,4 @@
-`JOQULAR` provides a simple declaritive way to match and validate JSON objects during query processes. It is based heavily on the MongoDB pattern matching approach but adds support for inline tests, more built-in types, wild card and RegExp key matching, and simple custom extension. `JOQULAR` can also be used to support <a href="#aliasing">aliasing, the provision of default or computed values</a> and object validation.
+`JOQULAR` provides a simple declaritive way to match and validate JSON objects during query processes. It original inspiration was the MongoDB pattern matching approach but it adds support for inline tests, more built-in types, wild card and RegExp key matching, <a href="#functional">functional keys</a>, <a href="#validation">object validation</a>, <a href="#aliasing">aliasing, the provision of default or computed values</a>, <a href="#return">value substitution and partial return</a>, <a href="#freeze">value freezing</a>.
 
 As will be seen in the examples below, a `JOQULAR` pattern is just a JavaScript object. In fact, all JavaScript objects are valid `JOQULAR` patterns with limited functionality, i.e. they will only match other JavaScript objects with identical data values in their leaf properties. In the context of `ReasonDB`, this means that a class instance not created as a result of a database query (and hence lacking an `#` id metadata property) can be used to retrieve similar objects from the database.
 
@@ -6,9 +6,13 @@ As will be seen in the examples below, a `JOQULAR` pattern is just a JavaScript 
 
 The predicates can be broken down into a number of categories including <a href="#comparison-operators">comparisons</a> like `$lt`, <a href="#set-and-array-operators">set and array operations</a> like `$includes`, <a href="#type-tests">type tests</a> like `$isSSN`, <a href="#text-search-tests">text search tests</a>, and <a href="#logical-operators">logical operators</a> like `$and`. You can also use <a href="#wild-cards">wild cards and `RegExp` property matching</a>, <a href="#inline-tests">inline tests</a> and <a href="#custom-predicates">custom predicates</a>. Every predicate can be used for both matching and <a href="#validating">validating</a> objects.
 
-The basic use of `JOQULAR` is best shown with an example. The pattern `{age:{$gte: 21}}` will match `{name: "joe", age: 22}` and `{name: "mary", age: 21}` but not `{name: "mark", age:19}`.
+The basic use of `JOQULAR` is best shown with short examples. 
 
-Nesting and logical operators are supported. The pattern `{age: {$gte: 21}, address:{city: {$eq: "Seattle", $or: {$eq: "Tacoma"}}}` will match `{name: "mary", age: 21, address:{city: "Seattle", zipcode:"98101"}}}` and `{name: "lauren", age: 25, address:{city: "Tacoma"}}}`
+The pattern `{age:{$gte: 21}}` will match `{name: "joe", age: 22}` and `{name: "mary", age: 21}` but not `{name: "mark", age:19}`.
+
+Nesting and logical operators are supported. 
+
+The pattern `{age: {$gte: 21}, address:{city: {$eq: "Seattle", $or: {$eq: "Tacoma"}}}` will match `{name: "mary", age: 21, address:{city: "Seattle", zipcode:"98101"}}}` and `{name: "lauren", age: 25, address:{city: "Tacoma"}}}`
 
 In some cases, predicates can take multiple arguments. When this happens, an array should be used to express the arguments. See `$between` and `$matches` for examples.
 
@@ -112,13 +116,13 @@ The extened tests are more business oriented and application specific.
 
 ## Logical Operators
 
-`$and` - Puts multiple constraints on a property value, e.g `{age: {$and: {$gte: 5, $lte: 10}}}`.
+`$and` - Puts multiple constraints on a property value, e.g `{age: {$and: {$gte: 5, $lte: 10}}}`. If you need to use the same predicate twice within a `$and`, you have two choices. Nest the calls: `{age: {$gte: 5, $and:{$gte: 6}}}}}`. You can nest to any depth. Or, use an array: `{age: {$and: [{$gte: 5},{$gte: 6}]}}`.
 
 `$not` - Negates constraints on a property value, e.g `{age: {$not: {$and: {$gte: 5, $lte: 10}}}}`.
 
-`$or` - Puts an or constraint on a property value, e.g. `{age: {$or: {$gte: 5, $lte: 10}}}`. If you need to use the same predicate twice, then nest `$or`, e.g. `{age: {$eq: 20, {$or: {$eq: 40}}}`.
+`$or` - Puts an or constraint on a property value, e.g. `{age: {$or: {$gte: 5, $lte: 0}}}`.  If you need to use the same predicate twice within an `$or`, you have two choices. Nest the calls: `{age: {$gte: 5, $or:{$lte: 0}}}`. You can nest to any depth. Or, use an array: `{age: {$or: [{$gte: 5},{$lte: 0}]}}`.
 
-`$xor` - Puts an xor constraint on a property value.
+`$xor` - Puts an xor constraint on a property value. It operates the same as `$or`, except only allows one value to be true.
 
 <a name="wild-cards">&nbsp;</a>
 
@@ -136,8 +140,18 @@ To use a regular expression, just provide a key name that looks like a regular e
 {"/.*name/":{$typeof: "string"}}
 ```
 
-```
+```javascript
 {[/.*name/]:{$typeof: "string"}} // use shorthand key initialization to ensure a valid `RegExp`.
+```
+
+<a name="functional>&nbsp;</a>
+
+## Functional Keys
+
+With `JOQULAR`, even a key can be a function. The below will match any object with a key that has a length greater than 1 where the value of the key is a string.
+
+```javascript
+{(key) => key.length > 1]:{$typeof: "string"}}
 ```
 
 <a name="inline-tests">&nbsp;</a>
@@ -169,6 +183,8 @@ To add predicates to `ReasonDB`, just pass them in as an keyed object value for 
 
 Predicates that are not defined this way rely on internals of `ReasonDB` that may change over time and how to create them is not the subject of further documentation.
 
+<a name="validation">&nbsp;</a>
+
 ## Validation
 
 `$valid` is itself a predicate and has available to it all other predicates. The below trivial case will always return matching objects:
@@ -195,14 +211,16 @@ To trap the errors, provide an error handler that takes the error, the value bei
 ```javascript
 {name:{
 	$typeof:"string",
-	$valid:{$: (value) => value.length>0, onError:(error,value,propertyName,containingObject) => {... do something ...;}}
+	$valid:{$: (value) => value.length>0, 
+		onError:(error,value,propertyName,containingObject) => {... do something ...;}}
 	}}
 ```
 
 You can also provide a function as the value for `$valid`. The function takes the property value, the property name, and the containing object as arguments. In the case below the `propertyName` will be `address` and the `containingObject` will at a minimum have a `name` property with a string value and most likely an `address` property, although it could be `undefined` ... part of the reason for the validation!
 
 ```javascript
-{name:{$typeof:"string"},address:{$valid:(theAddress,propertyName,containingObject) => { ... do something ... }}}
+{name:{$typeof:"string"},
+ address:{$valid:(theAddress,propertyName,containingObject) => { ... do something ... }}}
 ```
 Note, custom validators must handle their own errors.
 
@@ -256,7 +274,86 @@ Or, they can be functions that return values, similar to `$compute`, except that
 {random: {$default: () => Math.random()}}
 ```
 
+<a name="return">&nbsp;</a>
 
+## Value Substitution and Partial Return
 
+After matching an object it may be desirable to return only a portion of the object or even to replace some values in it. `$return` can be used to achieve these actions.
 
+To return a different value just pass a function that takes the current value as an argument:
 
+```javascript
+{name:{$typeof:"string",$return:value=>value.toUpperCase()}}
+```
+
+The same approach can be used to return just a portion of a nested object using destructuring:
+
+```javascript
+{address:{$typeof:"object",$return:({city,state})=>{city,state}}
+```
+
+You can also configure the properties returned:
+
+```javascript
+{name:{$typeof:"string",$return:{writable:false}}
+```
+
+By default the properties `enumerable`, `configurable`, `writable` will be left as their original values on the property descriptor for the object being modified. This is usualy `true`.
+
+When using configuration the value will default to the existing value, if you want to provide a substitute use `$return.value` or `$return.$value`.
+
+```javascript
+{name:{$typeof:"string",$return:{value:"it's a secret"}}
+```
+
+```javascript
+{name:{$typeof:"string",$return:{$value:(value) => encrypt(value)}}
+```
+
+`$return.$value` executes the function immediately using the current value. If you want to provide a function for runtime, just use `$return.value`.
+
+```javascript
+{name:{$typeof:"string",$return:{value:() => "it's a secret"}}
+```
+
+You can also provide `get` and `set` functions:
+
+```javascript
+{name:{$typeof:"string",$return:{get:() => "it's a secret"}}
+```
+
+<a name="freeze">&nbsp;</a>
+
+## Freezing Objects and Values
+
+By using `$freeze` you can make values unchangeable. The semantics are slightly different from `Object.freeze` in that `$freeze` can be used to set freeze the value of a single property.
+
+```javascript
+ // make name property unconfigurable and un-writable
+{name:{$typeof:"string",$freeze:true}}
+```
+
+```javascript
+// make address property unconfigurable and un-writable
+{address:{$typeof:"object",$freeze:true} 
+```
+
+```javascript
+// address property still changable, address deep frozen
+{address:{$typeof:"object",$freeze:{deep:true,property:false}} 
+```
+
+```javascript
+// address property still changable, address shallow frozen
+{address:{$typeof:"object",$freeze:{property:false}} 
+```
+
+```javascript
+// address property unconfigurable and un-writable, address deep frozen
+{address:{$typeof:"object",$freeze:{deep:true}} 
+```
+
+```javascript
+ // address property unconfigurable and un-writable, address shallow frozen
+{address:{$typeof:"object",$freeze:{}}
+```
