@@ -179,6 +179,11 @@ export const predicates = {
 			}
 		}
 	},
+	async $stemSearch(_,phrase) {
+		const tokens = arguments[2];
+		tokens.trigrams = [];
+		return predicates.$search.call(this,phrase,tokens);
+	},
 	$self(f) {
 		return f(this._value);
 	},

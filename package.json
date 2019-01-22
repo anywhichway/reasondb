@@ -1,6 +1,6 @@
 {
 	"name": "reasondb",
-	"version": "1.0.5b",
+	"version": "1.0.6b",
 	"description": "A JavaScript schema optional extensible key-value backed datastore supporting element level security, triggers, query pipelines, graphs, objects, documents, and joins.",
 	"private": false,
 	"isomorphic": true,
@@ -8,7 +8,6 @@
 		"CouchDB",
 		"database",
 		"Elasticsearch",
-		"Firebase",
 		"idbkvstore",
 		"IronCache",
 		"Localstorage",

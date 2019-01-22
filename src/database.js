@@ -571,13 +571,14 @@ export class Database {
 				return Object.assign({index:{},searchable:{},integrity:{},management:{},security:{},validation:{}},schema);
 			}
 	}
-	async graph(object,{ctor,indexDates,leaf}={}) {
+	async graph(object,{ctor,indexDates,leaf,write}={}) {
 		const root = await this.Edge();
 		for(let path of this.getPaths(object,{ctor,indexDates})) {
 			if(leaf) path.push(leaf);
 			const fullpath = path.slice();
 			const key = path.shift();
 			for await(const edge of root.get(key,undefined,path)) {	
+				if(write) edge.dirty = true;
 				await edge.save();
 			}
 		}
@@ -705,7 +706,7 @@ export class Database {
 				}
 			})
 		}
-		await this.graph(object,{indexDates,leaf:object["#"]}); // save adds id if missing
+		await this.graph(object,{indexDates,leaf:object["#"],write:true}); // save adds id if missing
 		if(reactive) return this.reactor(object);
 		return object;
 	}
@@ -860,7 +861,7 @@ export class Database {
 				if(save && !same && target["#"]) {
 					await this.options.storage.setItem(target["#"],JSON.stringify(target));
 					if(this.cache) this.cache.setItem(object["#"],object);
-					await this.graph(object._,{ctor:object.constructor,indexDates:true,leaf:object["#"]}); //"full"
+					await this.graph(object._,{ctor:object.constructor,indexDates:true,leaf:object["#"],write:true}); //"full"
 				}
 			}
 			return !recursing || atomic || !explode ? target : target["#"];
