@@ -1,6 +1,6 @@
 {
 	"name": "reasondb",
-	"version": "1.0.6b",
+	"version": "1.0.7b",
 	"description": "A JavaScript schema optional extensible key-value backed datastore supporting element level security, triggers, query pipelines, graphs, objects, documents, and joins.",
 	"private": false,
 	"isomorphic": true,
@@ -19,7 +19,7 @@
 		"pipeline",
 		"trigram"
 	],
-	"license": "MIT",
+	"license": "SSPL v1",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/anywhichway/reasondb.git"

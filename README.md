@@ -22,6 +22,8 @@ Full documentation is available at https://anywhichway.github.io/reasondb
 
 ## Updates (reverse chronological order)
 
+2019-06-10 v1.0.7b Switched to SSPL license.
+
 2019-01-22 v1.0.6b Improved full-text tokenizer. Fixed issue where graph was not flushing to storage for putItem.
 
 2019-01-21 v1.0.5b Enhanced JOQULAR to support $return.
