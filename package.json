@@ -32,7 +32,7 @@
 		"fos": ">=0.0.9-a",
 		"ioredis": "^4.3.0",
 		"js-sha3": "^0.7.0",
-		"node-fetch": "^1.7.1"
+		"node-fetch": "^2.6.1"
 	},
 	"devDependencies": {
 		"babel-plugin-transform-runtime": "^6.23.0",
