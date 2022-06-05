@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IndexedDB</title>
+</head>
+<body>
+<script>
+    class Schema {
+        static infer(object,{idKey="#",metadataKey="^"}={}) {
+            if(object.constructor.schema) {
+                object.constructor.schema.$id ||= object.constructor.name;
+                return object.constructor.schema = new Schema(object.constructor.schema);
+            }
+            const schema = {$id:object.constructor.name,type:"object",properties:{}};
+            Object.entries(object).forEach(([property,value]) => {
+                schema.properties[property] = {displayName:property,kind:"any",index:true}
+            })
+            schema.additionalProperties = true;
+            schema.autoExtend = {index:true};
+            schema.idKey = idKey;
+            schema.metadataKey = metadataKey;
+            schema.properties[idKey] ||= {displayName:idKey,kind:"string",index:idKey!=="#"};
+            schema.properties[metadataKey] ||= {displayName:metadataKey,kind:"object",index:metadataKey!=="^"};
+            object.constructor.schema = new Schema(schema);
+            object.constructor.schema.class || Object.defineProperty(object.constructor.schema,"class",{value:object.constructor});
+            return object.constructor.schema;
+        }
+        constructor(options={},{idKey="#",metadataKey="^",indexDefault}={}) {
+            const schema = Object.assign(this,{...options});
+            schema.name = schema.$id;
+            schema.properties = {...schema.properties||{}};
+            schema.required ||= [];
+            schema.idKey = idKey;
+            schema.metadataKey = metadataKey;
+            schema.properties[idKey] ||= {displayName:idKey,kind:"string",index:idKey!=="#"};
+            schema.properties[metadataKey] ||= {displayName:metadataKey,kind:"object",index:metadataKey!=="^"};
+            Object.entries(schema.properties).forEach(([property,value]) => {
+                if(value.required===true) schema.required.push(property);
+                if(value.kind && !value.type) {
+                    if(["boolean","number","string","any"].includes(value.kind)) value.type = value.kind;
+                    else if(value.kind.includes("Array")) value.type = "array";
+                    else value.type = "object";
+                }
+                if(value.index===undefined) value.index = !!indexDefault;
+                if(property[0]==="$") value.index = false; // todo: use regexp just to ensure first char is A-Za-z
+            });
+            if(!this.class) {
+                Object.defineProperty(this,"class",{value:
+                    class {
+                        constructor(config={}) {
+                            Object.assign(this,config);
+                            Object.entries(schema.properties).forEach(([property,value]) => {
+                                if(value.default && this[property]==null) this[property] = value.default;
+                            })
+                        }
+                    }})
+            }
+            if(!this.class.create) {
+                this.class.create = (config={}) => {
+                    const instance = Object.create(this.class.prototype);
+                    return Object.assign(instance,config);
+                }
+            }
+        }
+    }
+    const deepEqual = (a,b,matchType=deepEqual.LEFT, seen=new Set()) => {
+        if(matchType===deepEqual.RIGHT) return deepEqual(b,a,deepEqual.LEFT,seen);
+        if(matchType===deepEqual.COMMUTATIVE) return deepEqual(a,b,deepEqual.LEFT) && deepEqual(b,a,deepEqual.LEFT);
+        if(a===b) return true;
+        const type = typeof(a);
+        if(type==="function" || type!==typeof(b) || (a && !b) || (b && !a)) return false;
+        if(type==="number" && isNaN(a) && isNaN(b)) return true;
+        if(a && type==="object") {
+            if(seen.has(a)) return true;
+            seen.add(a);
+            if(a.constructor!==b.constructor || a.length!==b.length || a.size!==b.size) return false;
+            if(a instanceof Date) a.getTime() === b.getTime();
+            if(a instanceof RegExp) return a.toString() === b.toString();
+            if(a instanceof Set) {
+                for(const avalue of [...a]) {
+                    if(![...b].some((bvalue) => deepEqual(avalue,bvalue,matchType,seen))) return false;
+                }
+                return true;
+            }
+            if(a instanceof Map) {
+                for(const [key,value] of [...a]) {
+                    if(!deepEqual(b.get(key),value,matchType,seen)) return false;
+                }
+                return true;
+            }
+            for(const key in a) {
+                if(!deepEqual(a[key],b[key],matchType,seen)) return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    deepEqual.LEFT = 1;
+    deepEqual.COMMUTATIVE = 2;
+    deepEqual.RIGHT = 3;
+
+    const kindOf = (value) => {
+        const type = typeof(value);
+        if(!value || type!=="object") return type;
+        return value.constructor.name;
+    }
+    const keyRangeConverters = {
+        $gte: (x) => IDBKeyRange.lowerBound(x),
+        $gt: (x) => IDBKeyRange.lowerBound(x,true),
+        $eeq: (x) => x,
+        $lte: (x) => IDBKeyRange.upperBound(x),
+        $lt: (x) => IDBKeyRange.upperBound(x,true),
+        $between: (x,y,includeLower,includeUpper) => IDBKeyRange.bound(x, y,includeLower,includeUpper)
+    }
+    const toKeyRange = (value) => {
+        const type = typeof(value);
+        if(!value || type!=="object") return keyRangeConverters.$eeq(value);
+        const [operator,test] = Object.entries(value)[0],
+            converter = keyRangeConverters[operator];
+        if(converter) return Array.isArray(test) ? converter.apply(null,test) : converter(test);
+    }
+    const isRegExp = (value) => {
+        if(value[0]==="/" && value[value.length-1]==="/") return true;
+        return false;
+    }
+    const toRegExp = (value) => {
+        const pattern = value.substring(1,value.lastIndexOf("/")),
+            flags = value.substring(value.lastIndexOf("/")+1);
+        return new RegExp(pattern,flags);
+    }
+    const testConverters = {
+        $gte: (test) => (_,value) => value>=test,
+        $gt: (test) => (_,value) => value>test,
+        $eq: (test) => (_,value) => value==test,
+        $eeq: (test) => (_,value) => value===test,
+        $lte: (test) => (_,value) => value<=test,
+        $lt: (test) => (_,value) => value<test,
+        $between: (x,y,includeLower,includeUpper) => {
+            return (_,value) => {
+                if(value<x) return false;
+                if(value===x && !includeLower) return false;
+                if(value>y) return false;
+                if(value===y && !includeUpper) return false;
+                return true;
+            }
+        },
+        $isEven: (test) => {
+            const type = typeof(test);
+            if(type!=="boolean") throw new TypeError(`$isEven expected a boolean, not ${test}:${type}`)
+            return (_,value) => (value % 2 === 0) === test;
+        },
+        $isOdd: (test) => {
+            const type = typeof(test);
+            if(type!=="boolean") throw new TypeError(`$isOdd expected a boolean, not ${test}:${type}`)
+            return (_,value) => (value %2 !== 0) === test;
+        },
+        $typeof:(test) => {
+            const type = typeof(test);
+            if(type!=="string") throw new TypeError(`$typeof expected a string, not ${test}:${type}`)
+            return (_,value) => typeof(value)===test;
+        },
+        $not:(test) => {
+            const type = typeof(test);
+            if(!test || type!=="object") throw new TypeError(`$not expected an object, not ${test}:${type}`);
+            const f = toTest(null,test);
+            if(!f) throw new TypeError(`Target of $not is not a valid test expression, ${JSON.stringify(test)}`);
+            return async (key,value) => {
+                return !await f(key,value);
+            }
+        },
+        $and:(test) => {
+            const type = typeof(test);
+            if(!test || type!=="object") throw new TypeError(`$and expected an object, not ${test}:${type}`);
+            const tests = (Array.isArray(test) ? test : Object.entries(test)).map(([property,value]) => { return {[property]:value}}).map((test) => {
+                    const f = toTest(null,test);
+                    if(!f) throw new TypeError(`Target of $and is not a valid test expression, ${JSON.stringify(test)}`);
+                    return f;
+                });
+            return async (key,value) => {
+                for(const test of tests) {
+                    if(!await test(key,value)) return false;
+                }
+                return true;
+            }
+        },
+        $or:(test) => {
+            const type = typeof(test);
+            if(!test || type!=="object") throw new TypeError(`$or expected an object, not ${test}:${type}`);
+            const tests = (Array.isArray(test) ? test : Object.entries(test)).map(([property,value]) => { return {[property]:value}}).map((test) => {
+                const f = toTest(null,test);
+                if(!f) throw new TypeError(`Target of $or is not a valid test expression, ${JSON.stringify(test)}`);
+                return f;
+            });
+            return async (key,value) => {
+                for(const test of tests) {
+                    if(await test(key,value)) return true;
+                }
+                return false;
+            }
+        },
+        $xor:(test) => {
+            const type = typeof(test);
+            if(!test || type!=="object") throw new TypeError(`$or expected an object, not ${test}:${type}`);
+            const tests = (Array.isArray(test) ? test : Object.entries(test)).map(([property,value]) => { return {[property]:value}}).map((test) => {
+                const f = toTest(null,test);
+                if(!f) throw new TypeError(`Target of $xor is not a valid test expression, ${JSON.stringify(test)}`);
+                return f;
+            });
+            return async (key,value) => {
+                let passsed;
+                for(const test of tests) {
+                    if(await test(key,value)) {
+                        if(passed) return false;
+                        passed = true;
+                    }
+                }
+                return true;
+            }
+        },
+        $fuzzy:(test) => {
+            const type = typeof(test);
+            if(!test || type!=="object") throw new TypeError(`$fuzzy expected an object, not ${test}:${type}`);
+            const tests = (Array.isArray(test) ? test : Object.entries(test)).map(([property,value]) => { return {[property]:value}}).map((test) => {
+                const f = toTest(null,test);
+                if(!f) throw new TypeError(`Target of $fuzzy is not a valid test expression, ${JSON.stringify(test)}`);
+                return f;
+            });
+            return async (key,value) => {
+                let count = 0;
+                for(const test of tests) {
+                    const result = await test(key,value);
+                    if(result) {
+                        count = count + (typeof(result)==="number" ? result : 1);
+                    }
+                }
+                return count / tests.length;
+            }
+        }
+    }
+    testConverters.$ior = testConverters.$fuzzy;
+    testConverters.$typeOf = testConverters.$typeof;
+
+    const toTest = (key,value) => {
+        if(key && isRegExp(key)) {
+            const regex = toRegExp(key);
+            return (key) => regex.test(key);
+        }
+        if(isRegExp(value)) {
+            const regex = toRegExp(value);
+            return (_,value) => regex.test(value);
+        }
+        if(!value || typeof(value)!=="object" || Array.isArray(value)) {
+            return (_,v) => {
+                if(v===value) return true;
+                if(Array.isArray(value) && Array.isArray(v)) {
+                    return deepEqual(value,v,deepEqual.COMMUTATIVE);
+                }
+            }
+        }
+        const [operator,test] = Object.entries(value)[0];
+        const converter = testConverters[operator];
+        if(converter) return Array.isArray(test) ? converter.apply(null,test) : converter(test);
+    }
+
+    class User {
+        constructor(options={}) {
+            Object.assign(this,{...options});
+        }
+    }
+    User.schema = {$id:"User",additionalProperties:true,autoExtend:true,properties:{uid:{kind:"string"},displayName:{kind:"string"}}};
+
+    class ReasonDB {
+        constructor(name,{idGenerator = () => Math.random(),timestampAccess,metadataKey="^"}={}) {
+            this.name = name;
+            this.idGenerator = idGenerator;
+            this.timestampAccess = timestampAccess;
+            this.metadataKey = metadataKey;
+        }
+        async version() {
+            await this.db;
+            return this.db.version;
+        }
+        async open({version,onsuccess=()=>{},onupgradeneeded=()=>{}}={}) {
+            return new Promise((resolve) => {
+                const request = window.indexedDB.open(this.name,version);
+                request.onupgradeneeded = async (event) => {
+                    const {result,transaction} = event.target,
+                        db = result;
+                    this.db = db;
+                    if(!db.objectStoreNames.contains("Schema")) {
+                        const schemaStore = db.createObjectStore("Schema",{keyPath:"name"});
+                        await new Promise((resolve) => {
+                            const schema = new Schema(User.schema,{metadataKey:this.metadataKey});
+                            schema.type ||= "object";
+                            const result = schemaStore.put(schema);
+                            result.onsuccess = (event) => resolve()
+                        })
+                        transaction.oncomplete = () => {
+                            const version = db.version + 1;
+                            db.close();
+                            resolve(this.open({version,onsuccess,onupgradeneeded}));
+                        }
+                    } else {
+                        const schemaStore = transaction.objectStore("Schema"),
+                            request = schemaStore.getAllKeys();
+                        request.onsuccess = async ({target}) => {
+                            const {result} = target;
+                            let changes;
+                            for(const storeName of result) {
+                                let objectStore;
+                                if(db.objectStoreNames.contains(storeName)) {
+                                    objectStore = transaction.objectStore(storeName)
+                                } else {
+                                    objectStore = db.createObjectStore(storeName);
+                                    changes = true;
+                                }
+                                await new Promise((resolve) => {
+                                    const request = schemaStore.get(storeName);
+                                    request.onsuccess = (event) => {
+                                        const {result} = event.target,
+                                            schema = result;
+                                        for(const [property,value] of Object.entries(schema.properties)) {
+                                            if(value && typeof(value)==="object") {
+                                                if(value.index && !objectStore.indexNames.contains(property)) {
+                                                    const options = typeof(value.index)==="boolean" ? {unique: false, multiEntry:value.kind==="Array", locale:"auto" } : value.index;
+                                                    try {
+                                                        objectStore.createIndex(property,property,options)
+                                                    } catch(e) {
+                                                        continue;
+                                                    }
+                                                    changes = true;
+                                                }
+                                            }
+                                        }
+                                        resolve();
+                                    }
+                                })
+                            }
+                            await onupgradeneeded(event);
+                            if(changes) {
+                                transaction.oncomplete = () => {
+                                    db.close();
+                                    resolve(this.open({onsuccess}));
+                                }
+                            }
+                        }
+                    }
+                }
+                request.onsuccess = async (event) => {
+                    const {result} = event.target,
+                        db = result,
+                        transaction = result.transaction("Schema","readonly"),
+                        schemaStore = transaction.objectStore("Schema"),
+                        request = schemaStore.getAllKeys();
+                    let changes;
+                    request.onsuccess = async ({target}) => {
+                        const {result} = target;
+                        for(const storeName of result) {
+                            if(!db.objectStoreNames.contains(storeName)) {
+                                changes = true;
+                                break;
+                            }
+                            const transaction = db.transaction(storeName,"readonly"),
+                                objectStore = transaction.objectStore(storeName),
+                                request = schemaStore.get(storeName);
+                            await new Promise((resolve) => {
+                                request.onsuccess = ({target}) => {
+                                    const {result} = target,
+                                        schema = result;
+                                    for(const [property,value] of Object.entries(schema.properties)) {
+                                        if(value && typeof(value)==="object") {
+                                            if(value.index && !objectStore.indexNames.contains(property)) {
+                                                changes = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    resolve();
+                                }
+                            });
+                            if(changes) break;
+                        }
+                        if(changes) {
+                            const version = db.version + 1;
+                            transaction.oncomplete = () => {
+                                db.close();
+                                resolve(this.open({version:version,onsuccess,onupgradeneeded}));
+                            }
+                        } else if(transaction.mode==="versionchange") {
+                            transaction.oncomplete = () => {
+                                db.close();
+                                resolve(this.open({onsuccess}));
+                            }
+                        } else {
+                            this.db = db;
+                            await onsuccess(event);
+                            resolve(this.db);
+                        }
+                    }
+                }
+            })
+        }
+        async close() {
+            await this.db;
+            return this.db.close();
+        }
+        async restart({version,onsuccess,onupgradeneeded}={}) {
+            await this.close();
+            return this.db = this.open({version,onsuccess,onupgradeneeded});
+        }
+        async get(key,{storeName="KV"}={}) {
+            const mode = this.timestampAccess ? "readwrite" : "readonly",
+                transaction = (await this.db).transaction(storeName,mode),
+                objectStore = transaction.objectStore(storeName),
+                request = objectStore.get(key);
+            return new Promise((resolve) => {
+                request.onsuccess = (event) => {
+                    const result = event.target.result;
+                    if (result) {
+                        if (this.timestampAccess) {
+                            result[this.metadataKey].atime = Date.now();
+                            objectStore.put(result);
+                        }
+                    }
+                    resolve(result);
+                }
+            })
+        }
+        async set(key,value,{storeName="KV",transaction}={}) {
+            return this.put(value,{key,storeName});
+        }
+        async put(value,{
+                storeName=value.constructor.name,
+                transaction,
+                key
+        }={}) {
+            try {
+               (await this.db).transaction(storeName,"readwrite");
+            } catch(e) {
+                await this.createSchema(value);
+            }
+            // if properties in object that are not in schema, and schema allows extension,
+            // use below for validation also
+            await new Promise((resolve) => {
+                const schemaStore = this.db.transaction("Schema","readonly").objectStore("Schema"),
+                    request = schemaStore.get(storeName);
+                request.onsuccess = async (event) => {
+                    const {result} = event.target,
+                        schema = result;
+                    if(schema) { // currently no Schema for Schema, so putting a Schema throws unless this condition in place
+                        let changes;
+                        // add missing properties to schema, if extension allowed
+                        if(schema.autoExtend) {
+                            for(const [property,val] of Object.entries(value)) {
+                                if(!(property in schema.properties)) {
+                                    schema.properties[property] = {displayName:property,kind:"any"};
+                                    if(typeof(autoExtend)==="object") {
+                                        Object.assign(schema.properties[property],schema.autoExtend);
+                                    }
+                                    changes = true;
+                                }
+                            }
+                        }
+                        if(schema.metadataKey) {
+                            const metadata = value[schema.metadataKey] ||= {},
+                                now = Date.now();
+                            metadata.ctime ||= now;
+                            if(this.timestampAccess) metadata.atime ||= now;
+                            metadata.mtime ||= now;
+                            if(metadata.evidence==null) metadata.evidence = 1;
+                        }
+                        key = (value[schema.idKey] ||= key || this.idGenerator());
+                        if(changes) { // extend schema ... object will be indexed on next database restart
+                            this.put(schema,{storeName:"Schema"}); // await
+                        }
+                    }
+                    //if(!transaction) localTransaction = (await this.db).transaction(storeName,"readwrite");
+                    resolve();
+                }
+            });
+            let localTransaction = transaction;
+            localTransaction ||= (await this.db).transaction(storeName,"readwrite");
+            const objectStore = localTransaction.objectStore(storeName),
+                request = objectStore.keyPath ? objectStore.put(value) : objectStore.put(value,key);
+            return new Promise((resolve) => {
+                request.onsuccess = (event) => {
+                    const {result} = event.target;
+                    if(!transaction) {
+                        localTransaction.oncomplete = () => resolve(result);
+                    } else {
+                        resolve(result);
+                    }
+                }
+            })
+        }
+        async match(pattern) {
+            await this.db;
+            const mode = this.timestampAccess ? "readwrite" : "readonly",
+                objectStoreNames = Object.keys(pattern),
+                transaction = this.db.transaction(objectStoreNames,mode),
+                matches = {};
+            for(const [storeName,query] of Object.entries(pattern)) {
+                const objectStore = transaction.objectStore(storeName),
+                    promises = [],
+                    idLookup = query["#"] && typeof(query["#"])!=="object" ? query["#"] : null,
+                    keyLookups =  Object.entries(query).reduce((keyLookups,[property,value]) => {
+                        if(objectStore.indexNames.contains(property)) {
+                            const keyRange = toKeyRange(value);
+                            if(keyRange!==undefined) keyLookups.push([property,keyRange]);
+                        }
+                        return keyLookups;
+                    },[]),
+                    tests = Object.entries(query).reduce((tests,[property,value]) => {
+                        const test = toTest(property,value);
+                        if(test!==undefined) tests.push([property,test]);
+                        return tests;
+                    },[]);
+                let keyType;
+                if(idLookup) {
+                    keyType = typeof(idLookup);
+                    const request = objectStore.getKey(idLookup),
+                        result = await new Promise((resolve) => {
+                            request.onsuccess = (event) => {
+                                resolve(event.target.result);
+                            }
+                        });
+                    if(result) {
+                        matches[storeName] = {};
+                        matches[storeName][result] = 1;
+                    } else {
+                        continue;
+                    }
+                }
+                for(const [property,keyRange] of keyLookups) {
+                    const request = objectStore.index(property).getAllKeys(keyRange);
+                    promises.push(new Promise((resolve) => {
+                        request.onsuccess = (event) => {
+                            const {result} = event.target;
+                            if(matches[storeName]) {
+                                for(let key in matches[storeName]) {
+                                    if(keyType==="number") key = parseFloat(key);
+                                    if(!(result.includes(key))) delete matches[storeName][key];
+                                }
+                            } else {
+                                matches[storeName] = result.reduce((matches,value) => { matches[value] = 1; return matches; },{});
+                                if(result.length>0 && !keyType) keyType = typeof(result[0]);
+                            }
+                            resolve();
+                        }
+                    }))
+                }
+                if(keyLookups.length===0 && !idLookup) {
+                    const request = objectStore.getAllKeys();
+                    promises.push(new Promise((resolve) => {
+                        request.onsuccess = (event) => {
+                            const {result} = event.target;
+                            if(matches[storeName]) {
+                                for(let key in matches[storeName]) {
+                                    if(keyType==="number") key = parseFloat(key);
+                                    if(!(result.includes(key))) delete matches[storeName][key];
+                                }
+                            } else {
+                                matches[storeName] = result.reduce((matches,value) => { matches[value] = 1; return matches; },{});
+                                if(result.length>0 && !keyType) keyType = typeof(result[0]);
+                            }
+                            resolve();
+                        }
+                    }))
+                }
+                await Promise.all(promises);
+                let some;
+                for(let key in matches[storeName]) {
+                    if(keyType==="number") key = parseFloat(key);
+                    if(typeof(matches[storeName][key])==="object") continue;
+                    const request = objectStore.get(keyType==="number" ? parseFloat(key) : key),
+                        value = await new Promise((resolve) => {
+                            request.onsuccess = async (event) => {
+                                const result = event.target.result;
+                                let count = 0,
+                                    sum = 0;
+                                if(result==null) resolve();
+                                for(const [property,test] of tests) {
+                                    count++;
+                                    const value = await test(property,result[property]);
+                                    if(!value) {
+                                        resolve();
+                                        return;
+                                    }
+                                    if(typeof(value)==="number") sum += value;
+                                    else sum += 1;
+                                }
+                                if (this.timestampAccess) {
+                                    result[this.metadataKey].atime = Date.now();
+                                    const request = objectStore.put(result,key);
+                                    await new Promise((resolve) => request.onsuccess = () => resolve());
+                                }
+                                result[this.metadataKey] ||= {};
+                                result[this.metadataKey].match = sum / count;
+                                resolve(result);
+                            }
+                        });
+                    if(value===undefined) {
+                        delete matches[storeName][key]
+                    } else {
+                        some ||= true;
+                        matches[storeName][key] = value;
+                    }
+                }
+                if(!some) delete matches[storeName];
+            }
+            return matches;
+        }
+        async createSchema(object,{restart=true}={}) {
+            let schema = Schema.infer(object);
+            schema.$id ||= object.constructor.name;
+            schema = new Schema(schema,{metadataKey:this.metadataKey});
+            await this.put(schema,"Schema");
+            if(restart) await this.restart({version:this.db.version+1});
+            return schema;
+        }
+    }
+
+    ReasonDB.User = User;
+
+    class Address {
+        constructor(config={}) {
+            Object.assign(this,{...config});
+        }
+    };
+    Address.schema = {
+        properties: {
+            kind: {kind:"string"},
+            value: {kind:"string"}
+        },
+        autoExtend: {
+            index: true
+        }
+       // for: {kind:"Array"}
+    };
+
+    (() => {
+        const db = new ReasonDB("MyTestDb",{timestampAccess:true});
+        db.open({
+            onsuccess: async () => {
+                db.put(new ReasonDB.User({uid: "joe@somewhere.com", displayName: "Joe"}));
+                db.put(new ReasonDB.User({uid: "bill@somewhere.com", displayName: "Bill", tel:"206-555-1212"}));
+                db.put(new Address({kind:"email",value:"joe@somewhere.com"}));
+                console.log(1,await db.match({User:{uid:"joe@somewhere.com"}}));
+                console.log(2,await db.match({User:{uid:{$gte:"joe@somewhere.com"}}}));
+                console.log(3,await db.match({User:{"#": 0.08119216044663946}}));
+                console.log(4,await db.match({User:{uid:"joe@somewhere.com",displayName:{$typeof:"string"}}}));
+                console.log(5,await db.match({User:{uid:"joe@somewhere.com",displayName:{$typeof:"number"}}}));
+                console.log(6,await db.match({User:{uid:"joe@somewhere.com",displayName:{$not:{$typeof:"string"}}}}));
+                console.log(7,await db.match({User:{uid:"joe@somewhere.com",displayName:{$not:{$typeof:"number"}}}}));
+                console.log(8,await db.match({User:{uid:"joe@somewhere.com",displayName:{$not:{$not:{$typeof:"string"}}}}}));
+                console.log(9,await db.match({User:{uid:"joe@somewhere.com",displayName:{$and:{$typeof:"string"}}}}));
+                console.log(10,await db.match({User:{displayName:{$fuzzy:{$eq:"Joe",$typeof:"string"}}}}));
+            }
+        })
+    })();
+
+</script>
+</body>
+</html>

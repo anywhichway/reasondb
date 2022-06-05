@@ -1,2 +1,0 @@
-{"type":"json","key":"/Object/address/city"}
-"{\"path\":\"/Object/address/city\",\"edges\":{\"\\\"nyc\\\"\":true,\"\\\"seattle\\\"\":true},\"acls\":{\"r\":{\"a\":{},\"d\":{}},\"w\":{\"a\":{},\"d\":{}}}}"

@@ -1,0 +1,692 @@
+<head>
+    <script type="module">
+        import cleaner from "./little-cleaner.js";
+
+        const tagPrefix = "preface"
+
+        const registry = {};
+
+        const register = (name, view) => {
+            name = name.toLowerCase();
+            registry[name] = {view, tagName: name};
+            const cls = Function(`return class ${name} extends HTMLElement { constructor() { super(); }}`)();
+            customElements.define(
+                `${tagPrefix}-${name}`.toLowerCase(),
+                cls
+            );
+            return cls;
+        }
+
+        const Variable = ({node, storage, storageProxy, name, value}) => {
+            let _value = value,
+                _dependents = new Set(),
+                _react = false,
+                _import = false,
+                _export = false,
+                _share = false,
+                _setAttribute = node.setAttribute;
+            return {
+                set(value) {
+                    _value = value;
+                    if (_export) {
+                        if (value && typeof (value) === "object") {
+                            value = JSON.stringify(value);
+                        }
+                        node.attributes[name].value = value;
+                    }
+                    if (_share) {
+                        const proto = Object.getPrototypeOf(node);
+                        proto.__shared__ ||= {};
+                        proto.__shared__[name] = value;
+                    }
+                    [..._dependents.values()]
+                        .forEach((node) => {
+                            if (!node.parentNode) {
+                                _dependents.delete(node);
+                            } else if (node.render) {
+                                node.render({vars: storageProxy},true);
+                            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                                throw new Error("test")
+                                //renderElementNode(node,{vars:storageProxy})
+                            }
+                        })
+                    return _value;
+                },
+                valueOf() {
+                    if (activeNode) {
+                        const values = [..._dependents.values()];
+                        if (values.length === 0) {
+                            _dependents.add(activeNode);
+                        } else {
+                            values.forEach((node) => {
+                                node.contains(activeNode) || _dependents.add(activeNode);
+                                // if(activeNode.contains(node)) _dependents.delete(node);
+                            })
+                        }
+                    }
+                    if (_share) {
+                        const proto = Object.getPrototypeOf(node);
+                        _value = proto.__shared__ ? proto.__shared__[name] : undefined;
+                    }
+                    if (_import && _value === undefined) {
+                        let value = node.getAttribute(name);
+                        if (!value) {
+                            value = node.hasAttribute(name) + "";
+                        }
+                        try {
+                            _value = JSON.parse(value);
+                        } catch (e) {
+                            _value = value === "" ? null : value;
+                        }
+                    }
+                    return _value;
+                },
+                export(bool = true) {
+                    _export = bool;
+                },
+                share(bool = true) {
+                    _share = bool;
+                },
+                import(bool = true) {
+                    if (bool) {
+                        node.setAttribute = function (name, value) {
+                            try {
+                                value = JSON.parse(value);
+                            } catch (e) {
+
+                            }
+                            _value = value;
+                        }
+                    } else {
+                        node.setAttribute = _setAttribute;
+                    }
+                    _import = bool;
+                },
+                react(bool = true) {
+                    _react = bool;
+                    if (!bool) {
+                        _dependents = new Set(); // reset dependents
+                    }
+                }
+            }
+        }
+
+        let activeNode;
+
+        const setActiveNode = (node) => activeNode = node;
+
+        const getActiveNode = () => activeNode;
+
+        const resolve = (text, {vars = {}, locals = {}}, {clean = true} = {}) => {
+            if (clean) text = cleaner(text);
+            return Function("{vars,locals}", "with(vars) { with(locals) { return `" + text + "`}}")({
+                vars,
+                locals
+            });
+        }
+
+        const render = function(node, {vars, locals},{withAttributes=true}={}) {
+            if (node.__rendered__) {
+                return node;
+            }
+            if (node?.style?.display.includes("none")) {
+                return node;
+            }
+            if (node.render && node!==this) {
+                return node.render({vars, locals});
+            }
+            if(node.nodeType === Node.ELEMENT_NODE || node.nodeType===Node.DOCUMENT_FRAGMENT_NODE) {
+                if(node.nodeType!==Node.DOCUMENT_FRAGMENT_NODE) {
+                    if(withAttributes) {
+                        for (const attribute of node.attributes) {
+                            renderAttributeNode(attribute, {vars, locals});
+                        }
+                    }
+                    if(node.tagName==="SCRIPT") {
+                        renderScriptNode(node,{vars,locals});
+                        return node;
+                    }
+                }
+                for (const child of node.childNodes) {
+                    render(child, {vars, locals});
+                }
+                if (node.shadowRoot) {
+                    render(node.shadowRoot, {vars, locals})
+                }
+            } else if (node.nodeType === Node.TEXT_NODE) {
+                return renderTextNode(node, {vars, locals});
+            }
+            return node;
+        }
+
+        const renderAttributeNode = (node, {vars, locals}) => {
+            if (node.render) {
+                return node.render({vars, locals});
+            }
+            node.render = ({vars, locals},reactive) => {
+                setActiveNode(node);
+                const name = node.name,
+                    parent = node.ownerElement;
+                if (node.value.includes("${")) {
+                    renderTemplateAttribute(node, {vars, locals}, {parent, name});
+                }
+                if (name === ":") {
+                    renderBooleanAttribute(node, {vars, locals}, {parent, name});
+                } else if (name.startsWith("on:")) {
+                    renderEventAttribute(node, {vars, locals}, {parent, name})
+                } else if (name.startsWith(":if") || name.startsWith(":elseif") || name.startsWith(":else")) { // if:!!expression
+                    renderConditionalNode(node, {vars, locals}, {parent, name})
+                } else if (name.startsWith(":foreach") || name.startsWith(":forvalues") || name.startsWith(":forentries") || name.startsWith(":forkeys")) {
+                    renderLoopNode(node, {vars, locals}, {parent, name})
+                }
+                if(!parent.__rendered__ && reactive) {
+                    render(parent, {vars, locals}, {withAttributes: false})
+                }
+            }
+            return node.render({vars, locals});
+        }
+
+        const renderTemplateAttribute = (node, {vars, locals}, {parent, name}) => {
+            if (name.startsWith("on:")) {
+                return node;
+            }
+            node.template ||= node.nodeValue;
+            const value = resolve(node.template, {vars, locals});
+            if (value && typeof (value) === "object") {
+                parent.attributes[name].value = JSON.stringify(value);
+            } else {
+                parent.setAttribute(name, value);
+            }
+            return node;
+        }
+
+        const renderBooleanAttribute = (node, {vars, locals}, {parent}) => {
+            const value = node.value;
+            if ((value.startsWith("{") || value.startsWith("${")) && value.endsWith("}")) {
+                parent.removeAttribute("true");
+                parent.removeAttribute("false");
+                const start = value[0] === "$" ? 2 : 1,
+                    result = !!resolve(value.substring(start, value.length - 1), {vars, locals})
+                parent.setAttribute(result, "");
+            }
+            return node;
+        }
+
+        const renderEventAttribute = (node, {vars, locals}, {name, parent}) => {
+            const eventname = name.split(":")[1];
+            let body = node.value.trim();
+            const handler = (event) => {
+                setActiveNode(node);
+                return Function("{vars={},locals={}}", "with(vars) { with(locals) { return (" + body + ")()}}")({
+                    vars,
+                    locals
+                })
+            };
+            parent.onclick = handler; // do not use addEventListener hear, too much chance for double registered handler.
+        }
+
+        const renderConditionalNode = (node, {vars, locals}, {parent, name}) => {
+            parent.__rendered__ = true;
+            const clone = parent.cloneNode(true);
+            let value = false;
+            if (name === ":else") {
+                value = true;
+            } else {
+                value = parent.getAttribute(name);
+                if (parent.hasAttribute(value)) {
+                    value = parent.getAttribute(value);
+                }
+                try {
+                    value = !!JSON.parse(value)
+                } catch (e) {
+
+                }
+            }
+            if (value) {
+                for (const child of parent.childNodes) {
+                    if (child.attributes) {
+                        for (const attribute of child.attributes) {
+                            const name = attribute.name;
+                            if (name.startsWith(":elseif") || name.startsWith(":else")) {
+                                child.style.display += "none"
+                            } else {
+                                child.style.display = child.style.display.replace("none", "");
+                            }
+                        }
+                    } else {
+                        child.data = child.data || child.olddata || "";
+                    }
+                }
+            } else {
+                for (const child of parent.childNodes) {
+                    if (child.attributes) {
+                        let some;
+                        for (const attribute of child.attributes) {
+                            const name = attribute.name;
+                            if (name.startsWith(":elseif") || name.startsWith(":else")) {
+                                render(child, {vars, locals});
+                                if (!child.style.display.includes("none")) {
+                                    some = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!some) {
+                            child.style.display += "none";
+                        }
+                    } else {
+                        child.olddata = child.data || child.olddata || "";
+                        child.data = "";
+                    }
+                }
+            }
+        }
+
+        const doLoop = ({attrname, element, index, locals, vars, clone, parent}) => {
+            if (attrname) {
+                locals[attrname] = element;
+            }
+            locals.index = index;
+            for (const child of clone.childNodes) {
+                const clone = child.cloneNode(true);
+                render(clone, {vars, locals});
+                parent.appendChild(clone);
+            }
+        }
+        const renderLoopNode = (node, {vars, locals={}}, {parent, name}) => {
+            parent.__rendered__ = true;
+            const clone = parent.cloneNode(true);
+            let value = parent.getAttribute(name),
+                attrname;
+            if(parent.hasAttribute(value)) {
+                attrname = value;
+                value = parent.getAttribute(attrname);
+            }
+            try {
+                value = JSON.parse(value);
+            } catch (e) {
+                ;
+            }
+            while (parent.lastChild) {
+                parent.removeChild(parent.lastChild);
+            }
+            if (name === ":foreach") {
+                Object.assign(locals,{array: value});
+                value.forEach((element, index) => {
+                    locals.element = element;
+                    doLoop({attrname, element, index,locals, vars, clone, parent});
+                })
+            } else if (name === ":forvalues") {
+                const values = Object.values(value);
+                Object.assign(locals,{object: value});
+                values.forEach((element,index) => {
+                    locals.value = element;
+                    doLoop({attrname, element, index,locals, vars, clone, parent})
+                })
+            } else if (name === ":forentries") {
+                const values = Object.entries(value);
+                Object.assign(locals,{object: value});
+                values.forEach((element,index) => {
+                    locals.entry = element;
+                    doLoop({attrname, element, index,locals, vars, clone, parent})
+                })
+            } else if (name === ":forkeys") {
+                const values = Object.keys(value);
+                Object.assign(locals,{object: value});
+                values.forEach((element,index) => {
+                    locals.key = element;
+                    doLoop({attrname, element, index, locals, vars, clone, parent})
+                })
+            }
+            return node;
+        }
+
+        const renderScriptNode = (node,{vars, locals}) => {
+            if(node.getAttribute("type")===`text/${tagPrefix}`) {
+                const functions = {
+                    declare: vars.declare.bind(vars,node.parentNode,vars),
+                    imports(...variables) {
+                        for(const variable of variables) {
+                           const type = typeof(variable);
+                           if(type==="string") {
+                               vars.get(node,variable).import(true);
+                           } else if(variable && type==="object")  {
+                               for(const vname in variable) {
+                                    vars.get(node,variable).import(true);
+                               }
+                           }
+                        }
+                    }
+                }
+                node.render = ({vars,locals}) => {
+                    node.__rendered__ = true;
+                    setActiveNode(node);
+                    (Function("{vars={},locals={},functions,currentScript}",`with(vars) { with(locals) { with(functions) { ${node.innerHTML} }}}`))({vars,locals,functions,currentScript:node})
+                }
+                node.render({vars,locals});
+            }
+            return node;
+        }
+
+        const renderTextNode = (node, {vars, locals}) => {
+            if (node.__rendered__) {
+                return node;
+            }
+            if (node.render) {
+                return node.render({vars, locals});
+            }
+            if (node.nodeValue.includes("${")) {
+                node.template ||= node.nodeValue;
+               node.render = ({vars, locals}) => {
+                    setActiveNode(node);
+                    node.nodeValue = resolve(node.template, {vars, locals});
+                    node.__rendered__ = true;
+                }
+                return node.render({vars, locals});
+            }
+            return node;
+        }
+
+        const Storage = () => {
+            const _storage = new WeakMap();
+            return {
+                get(node, vname) {
+                    while (true) {
+                        let storage = _storage.get(node);
+                        if (!storage) {
+                            if (node.host) { // handle navigating up from shadowDOM
+                                storage = _storage.get(node.host);
+                            }
+                            if (!storage && !node.parentNode && !node.ownerElement) return;
+                        }
+                        if (storage) {
+                            const variable = storage[vname];
+                            if (variable !== undefined) {
+                                return variable;
+                            }
+                        }
+                        node = node.parentNode || node.ownerElement || node.host;
+                    }
+                    throw new TypeError(`${vname} is not declared in node or node's parents`)
+                },
+                set(node, vname, value) {
+                    while (true) {
+                        let storage = _storage.get(node);
+                        if (!storage) {
+                            if (node.host) { // handle navigating up from shadowDOM
+                                storage = _storage.get(node.host);
+                            }
+                            if (!storage && !node.parentNode && !node.ownerElement) return;
+                        }
+                        if (storage) {
+                            const variable = storage[vname];
+                            if (variable !== undefined) {
+                                return variable.set(value);
+                            }
+                        }
+                        node = node.parentNode || node.ownerElement || node.host;
+                    }
+                    throw new TypeError(`${vname} is not declared in node or node's parents`)
+                },
+                declare(node, storageProxy, ...variables) {
+                    let storage = _storage.get(node);
+                    if (!storage) {
+                        storage = {};
+                        _storage.set(node, storage);
+                    }
+                    for (let variable of variables) {
+                        let value;
+                        if (Array.isArray(variable)) {
+                            value = variable[1];
+                            variable = variable[0];
+                            storage[variable] = Variable({node, value, storage: this, storageProxy, name: variable});
+                            this[variable] = true; // so that a proxy can return the right key list
+                        } else if (variable && typeof (variable) === "object") {
+                            for(const vname in variable) {
+                                const value = variable[vname];
+                                storage[vname] = Variable({node, value, storage: this, storageProxy, name: vname});
+                                this[vname] = true; // so that a proxy can return the right key list
+                            }
+                        } else if(typeof(variable)==="string") {
+                            storage[variable] = Variable({node, value, storage: this, storageProxy, name: variable});
+                            this[variable] = true; // so that a proxy can return the right key list
+                        }
+                    }
+                }
+            }
+        }
+
+        const StorageProxy = (storage) => new Proxy(storage, {
+            get(target, property) {
+                const value = target[property];
+                if (typeof (value) === "function") {
+                    return value.bind(target);
+                }
+                if (typeof (property) === "symbol") return;
+                const variable = target.get(getActiveNode(), property);
+                return variable ? variable.valueOf() : variable;
+            },
+            set(target, property, value) {
+                target.set(getActiveNode(), property, value);
+                return true;
+            }
+        })
+
+        const activate = (node = document.body) => {
+            const tagName = node.tagName.toLowerCase(),
+                view = registry[tagName];
+            if(view) {
+                const replacement = realize({
+                    element:node,
+                    tagName,
+                    view:view.view
+                });
+                node.replaceWith(replacement);
+                node = replacement.shadowRoot;
+            }
+            Object.entries(registry)
+                .forEach(([key, view]) => {
+                    [...node.querySelectorAll(key)].forEach((element) => realize({
+                        element,
+                        tagName: view.tagName,
+                        view: view.view
+                    }))
+                });
+            render(node, {});
+        }
+
+        const firstKey = (object) => {
+            for (const key in object) return key;
+        }
+
+        const realize = ({element, tagName, view, storage =Storage(), storageProxy =StorageProxy(storage)}) => {
+            const create = () => {
+                const replacement = element || (tagName && registry[tagName]) ? document.createElement(`${tagPrefix}-${tagName}`) : document.createElement(tagName),
+                    root = element ? replacement.attachShadow({mode: "open"}) : replacement;
+                if(!element && tagName && registry[tagName]) {
+                    view = registry[tagName].view;
+                }
+                if(element || registry[tagName]) {
+                    storage = Storage();
+                    storageProxy = StorageProxy(storage);
+                }
+                let variables = view["@declare"];
+                if (typeof (variables) === "object" && !Array.isArray(variables)) {
+                    variables = [variables];
+                }
+                if(variables) {
+                    storage.declare(replacement, storageProxy, ...variables);
+                }
+                Object.entries(view)
+                    .forEach(([key, value]) => {
+                        if (key[0] !== "@") {
+                            // force creation
+                            replacement.setAttribute(key, "");
+                            // prevent coersing array looking strings and eliminating the leading and trailing []
+                            replacement.attributes[key].value = value && typeof (value) === "object" ? JSON.stringify(value) : value;
+                        } else if (storageProxy && ["@import", "@export", "@react", "@share"].includes(key)) {
+                            if (!Array.isArray(value)) {
+                                value = Object.keys(value);
+                            }
+                            value.forEach((vname) => storageProxy.get(replacement, vname)[key.substring(1)]())
+                        }
+                    });
+                if (element) {
+                    for (const attribute of element.attributes) {
+                        replacement.setAttribute(attribute.name, attribute.value);
+                    }
+                }
+                let content = view["@content"];
+                if (["boolean", "number", "string"].includes(typeof (content))) {
+                    root.innerHTML = content;
+                } else {
+                    content ||= [];
+                    if (!Array.isArray(content)) content = [content];
+                    content.forEach((view) => {
+                        if (["boolean", "number", "string"].includes(typeof (view))) {
+                            root.appendChild(document.createTextNode(view + ""));
+                        } else {
+                            const tagName = firstKey(view);
+                            root.appendChild(realize({tagName, view: view[tagName], storage, storageProxy}))
+                        }
+                    })
+                }
+                replacement.render = function() {
+                    render.call(this,replacement,{vars:storageProxy})
+                }
+                return replacement;
+            }
+            if (registry[tagName]) registry[tagName].create = create;
+            return create();
+        }
+
+        const toView = (node) => {
+            const config = {};
+            if(node.nodeType===Node.ELEMENT_NODE) {
+                node.normalize();
+                for(const attribute of node.attributes||[]) {
+                    config[attribute.name] = attribute.value;
+                }
+                const content = [];
+                for(const child of node.childNodes) {
+                    const childview = toView(child);
+                    if(childview) {
+                        content.push(childview);
+                    }
+                }
+                config["@content"] = content;
+                return {
+                    [node.tagName.toLowerCase()]: config
+                }
+            } else if(node.nodeType===Node.TEXT_NODE) {
+                return node.data;
+            }
+        }
+
+        const preface = (node = document.body) => {
+            const view = toView(node);
+            register(node.tagName,view[node.tagName.toLowerCase()]);
+            activate(node);
+        }
+
+        const parser = new DOMParser();
+        preface.import = async ({as,from}) => {
+            const response = await fetch(from),
+                text = await response.text(),
+                dom = parser.parseFromString(text,"text/html");
+            const view = toView(dom.body);
+            register(as,view[firstKey(view)]);
+            while(dom.head.firstChild) document.head.appendChild(dom.head.firstChild);
+        }
+
+        const View = (name, config) => register(name, config);
+
+        let count,
+            list,
+            stuff;
+        View("myStuff", {
+                count: 0,
+                stuff: [1, 2, 3],
+                "@declare": {count, list, stuff},
+                "@import": {count,stuff},
+                "@export": {count},
+                //"@share": {count},
+                "@react": {count},
+                "@content": [
+                    {
+                        ul: {
+                            ":forvalues": "stuff",
+                            stuff: "[1,2,3]",
+                            "@content": "<li>${stuff}</li>"
+                        }
+                    },
+                    {
+                        ul: {
+                            ":forentries": "${stuff}",
+                            stuff: "[1,2,3]",
+                            "@content": "<li>${entry}</li>"
+                        }
+                    },
+                    {
+                        ul: {
+                            ":forentries": "[1,2,3]",
+                            "@content": "<li>${entry}</li>"
+                        }
+                    },
+                    {
+                        button: {
+                            "@content": "${count}",
+                            "on:click": '() => count++'
+                        }
+                    },
+                    {
+                        div: {
+                            ":if": "true",
+                            "@content": "True!"
+                        }
+                    },
+                    {
+                        div: {
+                            ":if": "false",
+                            "@content": "False!"
+                        }
+                    },
+                    {
+                        div: {
+                            ":if": "false",
+                            "@content": [
+                                {
+                                    div: {
+                                        ":else": "",
+                                        "@content": "${count}"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        )
+
+        document.body.onload = async () => {
+            const hello = await preface.import({as:"hello",from:"./hello.html"});
+            preface();
+        }
+    </script>
+</head>
+<body>
+<div id="test1">
+    <myStuff></myStuff>
+</div>
+<hello name="Joe"></hello>
+<otherStuff id="test2">
+    <ul :forvalues="stuff" stuff="[1,2,3]">
+        <li>${stuff}</li>
+        <script type="text/preface">
+            console.log(stuff);
+        </script>
+    </ul>
+    <myStuff></myStuff>
+</otherStuff>
+
+</body>

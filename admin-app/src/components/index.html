@@ -1,0 +1,89 @@
+<html>
+<head>
+    <title>Test Head Mapping</title>
+    <script type="slndr">
+        const {gender,age} = exports({gender:"male",age:27});
+        imports({gender});
+        const {person} = reacts({gender,age,person:{name:"joe"},count:27});
+        const {foo} = shares({foo:10});
+        propagates({foo});
+
+        const monitored = monitors({"true":null,"false":null});
+        monitored.true.addEventListener("change",function({name,value,oldValue,vars}) {
+            console.log(`${name} changed from ${oldValue} to ${value} for `,this);
+            console.log("ctx",vars);
+        });
+        monitored.false.addEventListener("change",function({name,value,oldValue,vars}) {
+            console.log(`${name} changed from ${oldValue} to ${value} for `,this);
+            console.log("ctx",vars);
+        });
+        const watched = watches({age});
+        watched.age.addEventListener("change",({name,value,oldValue}) => {
+            console.log(`${name} changed from ${oldValue} to ${value}`)
+        });
+        setTimeout(() => {
+            person.name = "bill";
+        },1000);
+    </script>
+</head>
+<body>
+<script type="slndr">
+    reacts({count:0});
+    function incrementCount() {
+        count++;
+    }
+</script>
+<button on:click="incrementCount(${age})">
+    Clicked ${count} ${count===1 ? "time" :"times"}
+</button>
+<p>
+    name: ${person.name}
+</p>
+<input value="${age}">
+<div if:="${age > 25}">
+    <p>${gender}</p>
+    <p>${age}</p>
+    <p>${age > 100 ? age = age - 1 : age}</p>
+    <p>${foo > 0 ? (foo = 0) : foo}</p>
+    <div else:>
+        <p>Too young</p>
+    </div>
+</div>
+
+<ul forvalues:stuff stuff="[1,2,3]">
+    <li>${stuff}</li>
+    <ul forentries:stuff stuff="[1,2,3]">
+        <li>${stuff}</li>
+
+    </ul>
+</ul>
+
+<div if:=true>
+    I am true
+    <div>I am nested</div>
+    I follow
+</div>
+<div if:=false>
+Never show 1
+    <p elseif:=true>
+        I am an alternate 1
+    </p>
+Never show 2
+</div>
+
+<div if:=false>
+    <div elseif:=true>
+        I am an alternate 2
+    <div>
+</div>
+
+<style></style>
+<script type="slndr">
+    console.log("ok",window.location);
+</script>
+<script type="module" id="slndr">
+    import {compile} from "./slender.js";
+    compile({pathname:window.location.pathname,document,targets:[document.body]});
+</script>
+</body>
+</html>

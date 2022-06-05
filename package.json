@@ -1,61 +1,45 @@
 {
-	"name": "reasondb",
-	"version": "1.0.7b",
-	"description": "A JavaScript schema optional extensible key-value backed datastore supporting element level security, triggers, query pipelines, graphs, objects, documents, and joins.",
-	"private": false,
-	"isomorphic": true,
-	"keywords": [
-		"CouchDB",
-		"database",
-		"Elasticsearch",
-		"idbkvstore",
-		"IronCache",
-		"Localstorage",
-		"Memcached",
-		"MongoDB",
-		"PouchDB",
-		"Redis",
-		"fulltext",
-		"pipeline",
-		"trigram"
-	],
-	"license": "SSPL v1",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/anywhichway/reasondb.git"
-	},
-	"scripts": {
-		"start:dev": "webpack-dev-server"
-	},
-	"dependencies": {
-		"esm": "^3.0.84",
-		"fos": ">=0.0.9-a",
-		"ioredis": "^4.3.0",
-		"js-sha3": "^0.7.0",
-		"node-fetch": "^1.7.1"
-	},
-	"devDependencies": {
-		"babel-plugin-transform-runtime": "^6.23.0",
-		"babel-preset-env": "^1.7.0",
-		"babel-register": "^6.26.0",
-		"benchtest": "^1.0.0",
-		"blockstore": "^0.1.7",
-		"chai": "^4.1.0",
-		"doctyr": "0.0.3-b",
-		"idb-kv": "^1.2.5",
-		"idb-kv-store": "^4.3.1",
-		"kvvs": "0.0.1-a",
-		"localforage": "^1.7.2",
-		"mocha": "^3.4.2",
-		"performance-now": "^2.1.0",
-		"redis": "^2.8.0",
-		"scattered-store": "^1.0.0",
-		"webpack": "^4.28.3",
-		"webpack-cli": "^3.1.2",
-		"webpack-dev-server": "^3.1.14",
-		"webpack-node-externals": "^1.7.2"
-	},
-	"engines": {
-		"node": ">=9.x"
-	}
+  "name": "txi",
+  "version": "v2.0.1b",
+  "type": "module",
+  "description": "Indexed JSON store with joins, geospatial, full text search, extended math, and extended query patten support",
+  "engines": {},
+  "license": "AGPLv3",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anywhichway/reasondb.git"
+  },
+  "keywords": [
+    "mondodb",
+    "orbitdb",
+    "lmdb",
+    "elasticsearch"
+  ],
+  "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
+  "bugs": {
+    "url": "https://github.com/anywhichway/reasondb/issues"
+  },
+  "homepage": "https://github.com/anywhichway/reasondb#readme",
+  "dependencies": {
+    "@turf/turf": "^6.5.0",
+    "event-iterator": "^2.0.0",
+    "fast-copy": "^2.1.1",
+    "fast-equals": "^2.0.4",
+    "google-libphonenumber": "^3.2.26",
+    "itty-router": "^2.4.10",
+    "itty-router-extras": "^0.4.2",
+    "little-cleaner": "^1.0.3",
+    "lmdb": "^2.1.6",
+    "luxon": "^2.3.0",
+    "mathjs": "^10.1.0",
+    "mime-types": "^2.1.34",
+    "node-fetch": "^3.2.0",
+    "numbers": "^0.7.0",
+    "txi": "^0.0.7-b",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "jest": "^27.4.7"
+  }
 }

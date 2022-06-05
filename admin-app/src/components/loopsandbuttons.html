@@ -1,0 +1,99 @@
+<html>
+<body count="0" stuff="[1,2,3]">
+<script class="tlx">
+    let count = 0,
+        list,
+        stuff = [1, 2, 3],
+        mouse = {x: 0, y: 0};
+
+    let mypromise = new Promise((resolve, reject) => {
+        setTimeout(() => resolve("Resolved!"), 5000);
+    })
+
+    let myrejectedpromise = new Promise((resolve, reject) => {
+        setTimeout(() => reject("Awh ... I am rejected!"), 5000);
+    })
+
+    function handleMousemove(event) {
+        mouse.x = event.clientX;
+        mouse.y = event.clientY;
+    }
+
+    function onMount() {
+        console.log(this.tagName + " mounted");
+    }
+
+    function beforeUpdate() {
+        console.log("before update " + this.tagName);
+    }
+
+    function afterUpdate() {
+        console.log("after update " + this.tagName);
+    }
+
+    uses({count, list, stuff, mouse, mypromise, myrejectedpromise, handleMousemove});
+    imports({count, stuff});
+    exports({count});
+    //shares({count});
+    reacts({count, mouse});
+
+    if(window.mystore) {
+        window.mystore["anothervalue"] = 1;
+        delete window.mystore.user;
+        delete Stores.mystore;
+    }
+
+</script>
+<slot name="testslot" class:bold="${!$$slots.testslot}">Test slot default content</slot>
+<div if:="promise" promise="${!resolved(mypromise)}">
+    Waiting!
+    <div :else>
+        ${mypromise}
+    </div>
+
+</div>
+<div if:="promise" promise="${promised(myrejectedpromise)}">
+    Waiting!
+    <div elseif:="promise" promise="${rejected(myrejectedpromise)}">
+        ${myrejectedpromise.message}
+    </div>
+    <div :else>
+        ${myrejectedpromise}
+    </div>
+</div>
+<div on:mousemove="${handleMousemove}" style="width: 100%; height: 50px;">
+    The mouse position is ${mouse.x} x ${mouse.y}
+</div>
+<ul forvalues:="stuff">
+    <li>${stuff}</li>
+</ul>
+<ul forentries:="stuff" stuff="[1,2,3]">
+    <li>${entry}</li>
+</ul>
+<ul forvalues:="stuff" stuff="[1,2,3]">
+    <li>${value}</li>
+</ul>
+
+<button on:click="() => count++">${count}</button>
+
+<div if:="${count > 5}" class:bold="${count > 5}">
+    Stop clicking!
+    <div elseif:="${count > 3}">
+        slow down
+    </div>
+    <div :else="">
+        keep going
+    </div>
+</div>
+
+<input type="checkbox" checked="${count > 5}">
+
+<style>
+    .bold {
+        font-weight: bold;
+    }
+</style>
+
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+<html>
+    <head>
+        <script type="module">
+            import {slendr} from "./slender.js";
+            slendr({name:"custom",url:"./index.html"});
+        </script>
+    </head>
+    <body>
+    <custom gender="male" id="test"></custom>
+    <customfoo gender="male"></customfoo>
+    </body>
+    <script type="module">
+        import {transformTags} from "./slender.js";
+        document.body.innerHTML = transformTags(document.body.innerHTML);
+        setTimeout(() => {
+            const el = document.getElementById("test");
+            el.setAttribute("gender","female");
+        },5000)
+    </script>
+</html>
+
+
+

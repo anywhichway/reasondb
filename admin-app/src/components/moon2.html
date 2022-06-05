@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+</head>
+<body>
+<script type="module">
+    import {tlx,globals,Stores} from "./tlx.js";
+
+    window.addEventListener("DOMContentLoaded", async () => {
+        await tlx.import({as: "x-hello", from: "./hello.html"});
+        await tlx.import({as: "x-test", from: "./loopsandbuttons.html"});
+       tlx();
+    })
+    var {mystore} = Stores;
+    mystore.subscribe((event) => console.log(event));
+    mystore.count = 1;
+    mystore.count++;
+    mystore.user = {name:"joe",count:1};
+    mystore.user.name="mary";
+    mystore.user.count++;
+    globals({mystore});
+</script>
+<script src="./deferscript.js" defer>
+    mystore.user.name="bill";
+    //delete mystore.user;
+    //delete Stores.mystore;
+</script>
+<x-hello message="Joe"></x-hello>
+<x-hello></x-hello>
+<input value="boundvalue" bind:bound>
+${bound}
+<input name="bound2" value="boundvalue2" bind:>
+${bound2}
+<div on:input="(event) => console.log(event)" autobind="reacts">
+    <input name="testinput" value="testinputvalue"><br>
+    <select name="testselect">
+        <option>o1</option>
+        <option>o1</option>
+    </select>
+    <div>
+        ${testinput}
+    </div>
+</div>
+
+<div id="test1">
+    <x-test>
+        <div slot="testslot">Test slot content</div>
+    </x-test>
+</div>
+<otherStuff id="test2">
+    <ul forvalues:="stuff" stuff="[1,2,3]">
+        <li>${stuff}</li>
+        <script type="text/tlx">
+            console.log(stuff);
+
+        </script>
+    </ul>
+    <x-test></x-test>
+</otherStuff>
+
+
+</body>
+</html>

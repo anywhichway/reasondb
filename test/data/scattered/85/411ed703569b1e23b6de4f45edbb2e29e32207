@@ -1,2 +1,0 @@
-{"type":"json","key":"/Object/birthday"}
-"{\"path\":\"/Object/birthday\",\"edges\":{\"time\":true,\"day\":true,\"date\":true,\"hours\":true,\"milliseconds\":true,\"minutes\":true,\"month\":true,\"seconds\":true,\"year\":true},\"acls\":{\"r\":{\"a\":{},\"d\":{}},\"w\":{\"a\":{},\"d\":{}}}}"
